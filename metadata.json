@@ -1,0 +1,6 @@
+{
+  "name": "Balaji Communication | Jan Seva Kendra",
+  "description": "Balaji Communication provides Aadhaar, Ration Card, PM Kisan, Ayushman Card, Voter ID and digital government service assistance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
