@@ -57,10 +57,7 @@ export const AdminLogin: React.FC = () => {
             <CheckCircle className="w-4 h-4 text-blue-600" />
             <span>Default Administrator Credentials:</span>
           </div>
-          <div className="pl-5 space-y-0.5 text-slate-700 font-mono text-[11px]">
-            <div>Email: <strong>admin@balaji.com</strong></div>
-            <div>Password: <strong>balaji@2026</strong></div>
-          </div>
+
         </div>
 
         {error && (
