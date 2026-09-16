@@ -9,7 +9,7 @@ export const INITIAL_SETTINGS: WebsiteSettings = {
   whatsapp_number: "+919870677605",
   email: "vikkysingh9870677605@gmail.com",
   address_en: "Shop, Masjid bali gali, Near Inter college road Gaini, Bareilly, Uttar Pradesh - 243302",
-  address_hi: "दुकान नं. 4, मुख्य बाजार, सेंट्रल बैंक के पास, सेक्टर 12, नोएडा, उत्तर प्रदेश - 201301",
+  address_hi: "दुकान, मस्जिद बाली गली के पास, इंटर कॉलेज रोड, गैनी, बरेली, उत्तर प्रदेश - 243302",
   google_maps_url: "https://maps.google.com/?q=gaini+Uttar+Pradesh",
   opening_hours_en: "Mon - Sat: 9:00 AM - 8:00 PM | Sunday: 10:00 AM - 2:00 PM",
   opening_hours_hi: "सोम - शनि: सुबह 9:00 - रात 8:00 | रविवार: सुबह 10:00 - दोपहर 2:00",
