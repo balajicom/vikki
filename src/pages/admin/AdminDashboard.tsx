@@ -36,7 +36,7 @@ export const AdminDashboard: React.FC = () => {
     enquiries,
     settings,
     categories,
-    createService,
+    addService,
     updateService,
     deleteService,
     updateEnquiryStatus,
@@ -150,9 +150,9 @@ export const AdminDashboard: React.FC = () => {
     };
 
     if (editingServiceId) {
-      await updateService(serviceData);
+      await updateService(editingServiceId, serviceData);;
     } else {
-      await createService(serviceData);
+      await addService(serviceData);
     }
     setIsServiceModalOpen(false);
   };
@@ -160,8 +160,7 @@ export const AdminDashboard: React.FC = () => {
   // Toggle Service Active status directly
   const handleToggleServiceStatus = async (service: Service) => {
     const updatedStatus = service.status === 'Active' ? 'Disabled' : 'Active';
-    await updateService({ ...service, status: updatedStatus });
-  };
+   await updateService(service.service_id, {...service,status: updatedStatus,updated_at: new Date().toISOString(),});};
 
   // Save Site Settings
   const handleSaveSettings = async (e: React.FormEvent) => {
