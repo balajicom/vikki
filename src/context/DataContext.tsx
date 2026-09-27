@@ -39,6 +39,7 @@ interface DataContextType {
   deleteEnquiry: (id: string) => Promise<boolean>;
   updateSettings: (newSettings: Partial<WebsiteSettings>) => Promise<boolean>;
   syncWithGoogleSheets: (url?: string) => Promise<{ success: boolean; message: string; count?: number }>;
+  importCsvData: (type: string, csvText: string) => Promise<{ success: boolean; message: string; count?: number }>;
   refreshData: () => Promise<void>;
 }
 
@@ -431,6 +432,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Direct CSV File Import
+  const importCsvData = async (type: string, csvText: string) => {
+    try {
+      const res = await fetch('/api/import-csv', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ type, csvText })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await fetchData();
+        return { success: true, message: data.message, count: data.count };
+      }
+      return { success: false, message: data.error || 'Failed to import CSV' };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Error communicating with server' };
+    }
+  };
+
   return (
     <DataContext.Provider value={{
       services,
@@ -459,6 +482,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       deleteEnquiry,
       updateSettings,
       syncWithGoogleSheets,
+      importCsvData,
       refreshData: fetchData
     }}>
       {children}

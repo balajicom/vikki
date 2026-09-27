@@ -51,7 +51,7 @@ export const AdminLogin: React.FC = () => {
           </p>
         </div>
 
-      
+       
 
         {error && (
           <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-xs text-rose-800">

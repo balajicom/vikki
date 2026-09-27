@@ -3,12 +3,13 @@ import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { INITIAL_SERVICES, INITIAL_SETTINGS, CATEGORIES } from './src/data/initialData';
-import { Service, Enquiry, WebsiteSettings } from './src/types';
+import { Service, Enquiry, WebsiteSettings, PriceListItem, NoticeItem, QuickLinkItem, CitizenRecord } from './src/types';
+import { SHEET_TEMPLATES, generateCsvContent } from './src/data/sheetTemplates';
 
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // Database file path for local persistence
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -18,6 +19,10 @@ interface DatabaseSchema {
   services: Service[];
   enquiries: Enquiry[];
   settings: WebsiteSettings;
+  priceList?: PriceListItem[];
+  notices?: NoticeItem[];
+  quickLinks?: QuickLinkItem[];
+  citizens?: CitizenRecord[];
   adminCredentials: {
     email: string;
     passwordHash: string;
@@ -750,9 +755,222 @@ app.get('/api/export-services-csv', (req, res) => {
     ].join(','));
   });
 
-  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="balaji_services.csv"');
-  res.send(csvRows.join('\n'));
+  res.send('\uFEFF' + csvRows.join('\r\n'));
+});
+
+// 8. Google Sheet Templates Directory API
+app.get('/api/templates', (req, res) => {
+  const summary = SHEET_TEMPLATES.map(t => ({
+    id: t.id,
+    title: t.title,
+    hindiTitle: t.hindiTitle,
+    description: t.description,
+    fileName: t.fileName,
+    sheetTabName: t.sheetTabName,
+    badge: t.badge,
+    columnsCount: t.headers.length,
+    headers: t.headers,
+    sampleRowsCount: t.sampleRows.length,
+    downloadUrl: `/api/templates/${t.id}.csv`
+  }));
+  res.json({ success: true, templates: summary });
+});
+
+// 9. Download specific CSV Template for any importable entity
+app.get('/api/templates/:id', (req, res) => {
+  const cleanId = req.params.id.replace(/\.csv$/i, '').trim().toLowerCase();
+  const template = SHEET_TEMPLATES.find(t => t.id.toLowerCase() === cleanId);
+
+  if (!template) {
+    return res.status(404).json({
+      error: `Template '${cleanId}' not found. Available: ${SHEET_TEMPLATES.map(t => t.id).join(', ')}`
+    });
+  }
+
+  const csvContent = generateCsvContent(template);
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${template.fileName}"`);
+  res.send(csvContent);
+});
+
+// 10. Direct CSV Import Endpoint for all templates
+app.post('/api/import-csv', checkAdminAuth, (req, res) => {
+  const { type, csvText } = req.body;
+  if (!csvText || typeof csvText !== 'string' || !csvText.trim()) {
+    return res.status(400).json({ error: "CSV data is required." });
+  }
+
+  const rows = parseCsvToObjects(csvText);
+  if (rows.length === 0) {
+    return res.status(400).json({ error: "No valid rows found in the CSV content." });
+  }
+
+  const cleanType = (type || 'services').toLowerCase().trim();
+
+  if (cleanType === 'services') {
+    const importedServices: Service[] = [];
+    rows.forEach((r, idx) => {
+      const s = mapRowToService(r, idx);
+      if (s) importedServices.push(s);
+    });
+
+    if (importedServices.length === 0) {
+      return res.status(400).json({ error: "Could not parse any valid services from CSV. Please check columns." });
+    }
+
+    const importedIds = new Set(importedServices.map(s => s.service_id));
+    const retained = db.services.filter(s => !importedIds.has(s.service_id));
+    db.services = [...importedServices, ...retained];
+    saveDatabase(db);
+
+    return res.json({
+      success: true,
+      count: importedServices.length,
+      totalServices: db.services.length,
+      message: `Successfully imported ${importedServices.length} services from CSV file! Total catalog now has ${db.services.length} services.`
+    });
+  }
+
+  if (cleanType === 'enquiries') {
+    let addedCount = 0;
+    rows.forEach((r, idx) => {
+      const name = r.customer_name || r.applicant_name || r.name || '';
+      const mobile = r.mobile || r.phone || '';
+      if (!name || !mobile) return;
+
+      const newEnq: Enquiry = {
+        enquiry_id: r.enquiry_id || `ENQ-IMP-${Date.now().toString(36).toUpperCase()}-${idx + 1}`,
+        customer_name: name,
+        applicant_name: r.applicant_name || name,
+        father_or_husband_name: r.father_or_husband_name || r.father_name || '',
+        mobile: mobile.replace(/\D/g, '').slice(-10),
+        service_name: r.service_name || r.service || 'General Jan Seva Assistance',
+        category: r.category || 'General',
+        village: r.village || '',
+        address: r.address || '',
+        message: r.message || r.notes || 'Imported via CSV',
+        preferred_contact: (r.preferred_contact && r.preferred_contact.toLowerCase().includes('whatsapp')) ? 'WhatsApp' : 'Call',
+        urgency: r.urgency || 'Normal',
+        status: (['New', 'Contacted', 'Processing', 'Completed', 'Cancelled'].includes(r.status) ? r.status : 'New') as any,
+        created_at: r.created_at || new Date().toISOString()
+      };
+      db.enquiries.unshift(newEnq);
+      addedCount++;
+    });
+
+    if (addedCount === 0) {
+      return res.status(400).json({ error: "Could not parse any valid enquiries. 'customer_name' and 'mobile' columns are required." });
+    }
+
+    saveDatabase(db);
+    return res.json({
+      success: true,
+      count: addedCount,
+      totalEnquiries: db.enquiries.length,
+      message: `Successfully imported ${addedCount} citizen applications/enquiries from CSV file!`
+    });
+  }
+
+  if (cleanType === 'pricelist') {
+    const list: PriceListItem[] = rows.map((r, idx) => ({
+      price_id: r.price_id || `PRC-${idx + 1}`,
+      service_name: r.service_name || r.name || '',
+      category: r.category || 'General',
+      government_fee: r.government_fee || r.govt_fee || '₹0',
+      csc_service_fee: r.csc_service_fee || r.csc_fee || '₹0',
+      total_fee: r.total_fee || r.fee || '₹0',
+      processing_time: r.processing_time || r.time || '1-3 Days',
+      eligibility_or_note: r.eligibility_or_note || r.notes || '',
+      status: r.status || 'Active'
+    })).filter(p => p.service_name);
+
+    db.priceList = list;
+    saveDatabase(db);
+
+    return res.json({
+      success: true,
+      count: list.length,
+      message: `Successfully imported ${list.length} CSC price list items!`
+    });
+  }
+
+  if (cleanType === 'notices') {
+    const list: NoticeItem[] = rows.map((r, idx) => ({
+      notice_id: r.notice_id || `NTC-${idx + 1}`,
+      title_en: r.title_en || r.title || '',
+      title_hi: r.title_hi || r.title_en || '',
+      description_en: r.description_en || r.description || '',
+      description_hi: r.description_hi || r.description_en || '',
+      category: r.category || 'General',
+      badge_type: (['Urgent', 'New', 'Important', 'General'].includes(r.badge_type) ? r.badge_type : 'Important') as any,
+      last_date: r.last_date || '',
+      action_link: r.action_link || '',
+      status: (r.status === 'Archived' ? 'Archived' : 'Active') as any,
+      created_at: r.created_at || new Date().toISOString()
+    })).filter(n => n.title_en || n.title_hi);
+
+    db.notices = list;
+    saveDatabase(db);
+
+    return res.json({
+      success: true,
+      count: list.length,
+      message: `Successfully imported ${list.length} announcements & notices!`
+    });
+  }
+
+  if (cleanType === 'quicklinks') {
+    const list: QuickLinkItem[] = rows.map((r, idx) => ({
+      link_id: r.link_id || `LNK-${idx + 1}`,
+      portal_name: r.portal_name || r.name || '',
+      department: r.department || '',
+      category: r.category || 'General',
+      portal_url: r.portal_url || r.url || '',
+      description: r.description || '',
+      portal_login_type: r.portal_login_type || '',
+      required_credentials: r.required_credentials || ''
+    })).filter(l => l.portal_name && l.portal_url);
+
+    db.quickLinks = list;
+    saveDatabase(db);
+
+    return res.json({
+      success: true,
+      count: list.length,
+      message: `Successfully imported ${list.length} government portal quick links!`
+    });
+  }
+
+  if (cleanType === 'citizens') {
+    const list: CitizenRecord[] = rows.map((r, idx) => ({
+      citizen_id: r.citizen_id || `CIT-${idx + 1}`,
+      full_name: r.full_name || r.name || '',
+      father_name: r.father_name || '',
+      mobile: (r.mobile || '').replace(/\D/g, '').slice(-10),
+      aadhaar_last4: r.aadhaar_last4 || '',
+      village: r.village || '',
+      address: r.address || '',
+      services_availed: r.services_availed || '',
+      notes: r.notes || '',
+      status: (r.status || 'Active') as any,
+      created_at: r.created_at || new Date().toISOString()
+    })).filter(c => c.full_name);
+
+    db.citizens = list;
+    saveDatabase(db);
+
+    return res.json({
+      success: true,
+      count: list.length,
+      message: `Successfully imported ${list.length} citizen customer records!`
+    });
+  }
+
+  return res.status(400).json({
+    error: `Unknown import type: '${type}'. Supported types: services, enquiries, pricelist, notices, quicklinks, citizens`
+  });
 });
 
 // ================= VITE MIDDLEWARE / STATIC ASSETS =================

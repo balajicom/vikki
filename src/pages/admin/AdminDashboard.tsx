@@ -22,12 +22,25 @@ import {
   AlertCircle,
   Search,
   Eye,
-  EyeOff
+  EyeOff,
+  Download,
+  UploadCloud,
+  Table,
+  FileText,
+  CheckCircle2,
+  HelpCircle,
+  ArrowRight,
+  Sparkles,
+  CreditCard,
+  Users,
+  Heart,
+  Smartphone
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
-import { Service, Enquiry, SiteSettings } from '../../types';
+import { Service, Enquiry, SiteSettings, SheetTemplateInfo } from '../../types';
 import { getServiceIcon } from '../../utils/iconHelper';
 import { GOOGLE_APPS_SCRIPT_CODE } from '../../data/googleAppsScriptCode';
+import { SHEET_TEMPLATES, downloadCsvTemplate, generateTabSeparatedContent } from '../../data/sheetTemplates';
 
 export const AdminDashboard: React.FC = () => {
   const {
@@ -44,7 +57,8 @@ export const AdminDashboard: React.FC = () => {
     updateEnquiryStatus,
     deleteEnquiry,
     updateSettings,
-    syncWithGoogleSheets
+    syncWithGoogleSheets,
+    importCsvData
   } = useData();
 
   const navigate = useNavigate();
@@ -86,6 +100,14 @@ export const AdminDashboard: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
+
+  // Google Sheet & CSV Templates State
+  const [selectedTemplateForPreview, setSelectedTemplateForPreview] = useState<SheetTemplateInfo | null>(null);
+  const [copiedTemplateId, setCopiedTemplateId] = useState<string | null>(null);
+  const [isImportingFile, setIsImportingFile] = useState(false);
+  const [activeImportingId, setActiveImportingId] = useState<string | null>(null);
+  const [importStatusBanner, setImportStatusBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [templateFilterCategory, setTemplateFilterCategory] = useState<string>('all');
 
   // Search & Filters for Enquiries
   const [enquiryFilterStatus, setEnquiryFilterStatus] = useState<string>('All');
@@ -252,6 +274,61 @@ export const AdminDashboard: React.FC = () => {
     setTimeout(() => setCopiedCode(false), 2500);
   };
 
+  // Copy Template Headers & Sample Row for Direct Paste in Google Sheets (Ctrl+V)
+  const handleCopyTemplateHeaders = (template: SheetTemplateInfo) => {
+    try {
+      const tsv = generateTabSeparatedContent(template);
+      navigator.clipboard.writeText(tsv);
+      setCopiedTemplateId(template.id);
+      setTimeout(() => setCopiedTemplateId(null), 3000);
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err);
+    }
+  };
+
+  // Direct CSV File Upload Handler
+  const handleFileUpload = async (templateId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsImportingFile(true);
+    setActiveImportingId(templateId);
+    setImportStatusBanner(null);
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const text = e.target?.result as string;
+        if (!text || !text.trim()) {
+          setImportStatusBanner({ type: 'error', message: 'Selected file is empty.' });
+          setIsImportingFile(false);
+          setActiveImportingId(null);
+          return;
+        }
+
+        const res = await importCsvData(templateId, text);
+        if (res.success) {
+          setImportStatusBanner({ type: 'success', message: res.message });
+        } else {
+          setImportStatusBanner({ type: 'error', message: res.message });
+        }
+      } catch (err: any) {
+        setImportStatusBanner({ type: 'error', message: err.message || 'Failed to process CSV file.' });
+      } finally {
+        setIsImportingFile(false);
+        setActiveImportingId(null);
+        event.target.value = '';
+      }
+    };
+    reader.onerror = () => {
+      setImportStatusBanner({ type: 'error', message: 'Could not read file from disk.' });
+      setIsImportingFile(false);
+      setActiveImportingId(null);
+      event.target.value = '';
+    };
+    reader.readAsText(file);
+  };
+
   // Filtered Enquiries
   const filteredEnquiries = enquiries.filter(enq => {
     if (enquiryFilterStatus === 'All') return true;
@@ -415,7 +492,12 @@ export const AdminDashboard: React.FC = () => {
             }`}
           >
             <FileSpreadsheet className="w-4 h-4" />
-            <span>Google Sheets Sync</span>
+            <span>Google Sheets & Templates (6)</span>
+            <span className={`px-1.5 py-0.2 rounded text-[10px] font-extrabold uppercase ${
+              activeTab === 'sheets' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
+            }`}>
+              All Templates
+            </span>
           </button>
         </div>
 
@@ -925,59 +1007,110 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 4: GOOGLE SHEETS INTEGRATION & SCRIPT SETUP */}
+        {/* TAB 4: GOOGLE SHEETS & ALL IMPORT TEMPLATES HUB */}
         {activeTab === 'sheets' && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
-            <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold uppercase tracking-wider mb-2">
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Google Sheets Database Backend</span>
-              </div>
-              <h2 className="text-xl font-bold text-slate-900">
-                Google Sheets & Google Apps Script Setup
-              </h2>
-              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                Connect your Google Spreadsheet to store citizen enquiries, publish new services, and sync site settings. The website automatically falls back to secure local storage if no URL is provided.
-              </p>
-            </div>
-
-            {/* Sync URL Configuration Box */}
-            <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="space-y-6">
+            
+            {/* Header Banner */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">
-                    Google Spreadsheet Link or Apps Script Web App URL
-                  </h3>
-                  <p className="text-[11px] text-slate-500">
-                    Supports public Google Sheets (Share &gt; Anyone with link can view) OR Google Apps Script Web App URLs.
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold uppercase tracking-wider mb-2">
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Google Sheets & CSV Template Center</span>
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-black text-slate-900">
+                    Google Sheet Templates & Data Importer (सभी गूगल शीट टेम्पलेट्स)
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-3xl leading-relaxed">
+                    Download ready-to-use CSV templates formatted for Google Sheets, copy column headers for instant paste (<kbd className="px-1.5 py-0.5 bg-slate-200 text-slate-800 rounded font-mono text-[11px]">Ctrl+V</kbd>), upload CSV files directly, or link your Google Spreadsheet for automatic bidirectional syncing.
                   </p>
                 </div>
 
-                <a
-                  href="/api/export-services-csv"
-                  download="balaji_services.csv"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg shadow-2xs transition-colors shrink-0"
-                  title="Download CSV formatted with all services to easily import into Google Sheets"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Download Services CSV Template</span>
-                </a>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <a
+                    href="https://sheets.new"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors shadow-2xs"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Open sheets.new</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={handleCopyScriptCode}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors shadow-2xs"
+                  >
+                    {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedCode ? 'Copied Master Code!' : 'Copy Master Code.gs'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Status Banner for Direct Imports */}
+              {importStatusBanner && (
+                <div className={`mt-4 p-4 rounded-xl border text-xs font-semibold flex items-center justify-between gap-3 ${
+                  importStatusBanner.type === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    : 'bg-rose-50 border-rose-200 text-rose-900'
+                }`}>
+                  <div className="flex items-center gap-2.5">
+                    {importStatusBanner.type === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    )}
+                    <span>{importStatusBanner.message}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setImportStatusBanner(null)}
+                    className="text-slate-400 hover:text-slate-700 text-sm font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Google Spreadsheet Live Sync Bar */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <span>Google Spreadsheet Link or Apps Script Web App URL</span>
+                    <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-800 rounded-full">
+                      Live Sync
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Paste your Google Spreadsheet link (<code className="bg-slate-100 px-1 py-0.5 rounded text-slate-700">https://docs.google.com/spreadsheets/d/...</code>) or Web App link (<code className="bg-slate-100 px-1 py-0.5 rounded text-slate-700">https://script.google.com/macros/s/.../exec</code>)
+                  </p>
+                </div>
+
+                {settings.last_sheet_sync && (
+                  <div className="text-[11px] text-emerald-700 font-medium bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-200 flex items-center gap-1.5 shrink-0">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Last synced: {new Date(settings.last_sheet_sync).toLocaleString()}</span>
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="url"
-                  placeholder="https://docs.google.com/spreadsheets/d/... OR https://script.google.com/macros/s/.../exec"
+                  placeholder="Paste Google Sheet URL (Public link) or Web App URL..."
                   value={sheetsUrlInput}
                   onChange={(e) => setSheetsUrlInput(e.target.value)}
-                  className="flex-1 px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+                  className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
                 />
                 <button
                   type="button"
                   id="btn-sync-sheets"
                   onClick={handleSyncSheets}
                   disabled={isSyncing}
-                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors inline-flex items-center justify-center gap-2 shrink-0 disabled:opacity-60"
+                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors inline-flex items-center justify-center gap-2 shrink-0 disabled:opacity-60 cursor-pointer"
                 >
                   <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
                   <span>{isSyncing ? 'Connecting & Syncing...' : 'Fetch & Sync Now'}</span>
@@ -985,7 +1118,7 @@ export const AdminDashboard: React.FC = () => {
               </div>
 
               {syncStatusMsg && (
-                <div className={`p-3 rounded-lg text-xs font-medium border ${
+                <div className={`p-3 rounded-lg text-xs font-semibold border ${
                   syncStatusMsg.toLowerCase().includes('success') || syncStatusMsg.toLowerCase().includes('imported') || syncStatusMsg.toLowerCase().includes('loaded')
                     ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
                     : 'bg-amber-50 border-amber-200 text-amber-800'
@@ -993,61 +1126,253 @@ export const AdminDashboard: React.FC = () => {
                   {syncStatusMsg}
                 </div>
               )}
-
-              {settings.last_sheet_sync && (
-                <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Last synced from Google Sheet on: {new Date(settings.last_sheet_sync).toLocaleString()}</span>
-                </div>
-              )}
             </div>
 
-            {/* Step-by-step Setup Guide */}
-            <div className="space-y-4 pt-2">
-              <h3 className="text-sm font-bold text-slate-900">
-                How to set up your Google Sheet in 3 minutes:
-              </h3>
+            {/* Template Directory Header & Filter Pills */}
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                    <span>Ready-to-Use Import Templates for Google Sheets</span>
+                    <span className="px-2 py-0.5 text-xs bg-slate-200 text-slate-800 font-bold rounded-full">
+                      {SHEET_TEMPLATES.length} Templates
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Click <strong>Download CSV</strong> to open in Excel/Sheets, <strong>Copy for Sheets</strong> to paste columns, or <strong>Import CSV</strong> to upload records immediately.
+                  </p>
+                </div>
 
+                {/* Filter Pills */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {[
+                    { id: 'all', label: 'All Templates' },
+                    { id: 'services', label: 'Services' },
+                    { id: 'enquiries', label: 'Citizen Enquiries' },
+                    { id: 'pricelist', label: 'Price List' },
+                    { id: 'notices', label: 'Notice Board' },
+                    { id: 'quicklinks', label: 'Quick Links' },
+                    { id: 'citizens', label: 'Citizen Registry' }
+                  ].map(f => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setTemplateFilterCategory(f.id)}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                        templateFilterCategory === f.id
+                          ? 'bg-blue-700 text-white'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Template Cards Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {SHEET_TEMPLATES.filter(t => templateFilterCategory === 'all' || t.id === templateFilterCategory).map(template => {
+                  const isCopied = copiedTemplateId === template.id;
+                  const isUploading = isImportingFile && activeImportingId === template.id;
+
+                  return (
+                    <div
+                      key={template.id}
+                      className="bg-white rounded-2xl border border-slate-200 hover:border-blue-400 p-5 shadow-xs transition-all flex flex-col justify-between space-y-4"
+                    >
+                      <div className="space-y-3">
+                        {/* Top Badges */}
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase rounded-md bg-blue-100 text-blue-800">
+                            {template.badge}
+                          </span>
+                          <span className="text-[11px] font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold">
+                            Sheet Tab: <strong>{template.sheetTabName}</strong>
+                          </span>
+                        </div>
+
+                        {/* Title & Description */}
+                        <div>
+                          <h4 className="text-sm font-bold text-slate-900 group-hover:text-blue-700">
+                            {template.title}
+                          </h4>
+                          <span className="text-xs font-medium text-slate-500 block">
+                            {template.hindiTitle}
+                          </span>
+                          <p className="text-xs text-slate-600 mt-1.5 line-clamp-3 leading-relaxed">
+                            {template.description}
+                          </p>
+                        </div>
+
+                        {/* Columns Preview Pill List */}
+                        <div className="pt-1">
+                          <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1.5 font-medium">
+                            <span>Columns ({template.headers.length}):</span>
+                            <span>{template.sampleRows.length} Sample Rows</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1 max-h-16 overflow-y-auto pr-1">
+                            {template.headers.slice(0, 6).map(h => (
+                              <span
+                                key={h}
+                                className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-700 text-[10px] font-mono rounded"
+                              >
+                                {h}
+                              </span>
+                            ))}
+                            {template.headers.length > 6 && (
+                              <span className="px-1.5 py-0.5 bg-slate-50 text-slate-400 text-[10px] rounded font-medium">
+                                +{template.headers.length - 6} more
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="space-y-2 pt-3 border-t border-slate-100">
+                        {/* Primary Buttons Row */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <a
+                            href={`/api/templates/${template.id}.csv`}
+                            download={template.fileName}
+                            onClick={() => downloadCsvTemplate(template)}
+                            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors shadow-2xs"
+                            title="Download CSV Template with Hindi & English support"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Download CSV</span>
+                          </a>
+
+                          <button
+                            type="button"
+                            onClick={() => handleCopyTemplateHeaders(template)}
+                            className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-colors border shadow-2xs ${
+                              isCopied
+                                ? 'bg-emerald-600 text-white border-emerald-600'
+                                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
+                            }`}
+                            title="Copy tab-delimited headers to paste directly into Google Sheets (Ctrl+V)"
+                          >
+                            {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5 text-blue-600" />}
+                            <span>{isCopied ? 'Copied Headers!' : 'Copy for Sheets'}</span>
+                          </button>
+                        </div>
+
+                        {/* Secondary Row: Preview & Direct CSV Import */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedTemplateForPreview(template)}
+                            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold transition-colors"
+                          >
+                            <Table className="w-3 h-3 text-slate-500" />
+                            <span>Preview Rows</span>
+                          </button>
+
+                          <label
+                            className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer ${
+                              isUploading
+                                ? 'bg-amber-100 text-amber-800 cursor-wait'
+                                : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200'
+                            }`}
+                            title="Upload completed CSV to import directly into database"
+                          >
+                            {isUploading ? (
+                              <>
+                                <RefreshCw className="w-3 h-3 animate-spin text-amber-600" />
+                                <span>Importing...</span>
+                              </>
+                            ) : (
+                              <>
+                                <UploadCloud className="w-3 h-3 text-blue-600" />
+                                <span>Import .CSV</span>
+                              </>
+                            )}
+                            <input
+                              type="file"
+                              accept=".csv,text/csv"
+                              disabled={isUploading}
+                              className="hidden"
+                              onChange={(e) => handleFileUpload(template.id, e)}
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Master Multi-Tab Google Sheet 1-Click Guide */}
+            <div className="bg-slate-900 text-slate-200 rounded-2xl p-6 sm:p-7 space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-2">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Master Multi-Tab Database</span>
+                  </div>
+                  <h3 className="text-lg sm:text-xl font-black text-white">
+                    One Single Google Sheet for Everything (Services, Enquiries, PriceList, Notices, QuickLinks, Citizens)
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-2xl leading-relaxed">
+                    You don't need 6 different spreadsheets. You can have 1 master spreadsheet with 7 organized tabs, automatically created and formatted in 2 seconds using our Google Apps Script macro!
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleCopyScriptCode}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors shadow-lg shrink-0"
+                >
+                  {copiedCode ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
+                  <span>{copiedCode ? 'Code.gs Copied!' : 'Copy Code.gs Script'}</span>
+                </button>
+              </div>
+
+              {/* 3 Simple Setup Steps */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
-                  <span className="font-bold text-blue-700">Step 1: Create Spreadsheet</span>
-                  <p className="text-slate-600">
-                    Open <a href="https://sheets.new" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline font-semibold">sheets.new</a> and rename your sheet to <strong>Balaji Communication Jan Seva Kendra</strong>.
-                  </p>
-                  <p className="text-[11px] text-slate-500">
-                    Create 3 tabs: <code className="bg-slate-200 px-1 rounded">Services</code>, <code className="bg-slate-200 px-1 rounded">Enquiries</code>, and <code className="bg-slate-200 px-1 rounded">Settings</code>.
+                <div className="p-4 rounded-xl bg-slate-800/80 border border-slate-700 space-y-2">
+                  <div className="w-6 h-6 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center">1</div>
+                  <h4 className="font-bold text-white text-sm">Create New Sheet & Open Script</h4>
+                  <p className="text-slate-400 text-[11px] leading-relaxed">
+                    Open <a href="https://sheets.new" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-semibold">sheets.new</a>, then click <strong>Extensions &gt; Apps Script</strong>. Delete any blank code.
                   </p>
                 </div>
 
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
-                  <span className="font-bold text-emerald-700">Step 2: Paste Code.gs</span>
-                  <p className="text-slate-600">
-                    In your spreadsheet, go to <strong>Extensions &gt; Apps Script</strong>. Delete any code in <code className="bg-slate-200 px-1 rounded">Code.gs</code> and paste the script below.
+                <div className="p-4 rounded-xl bg-slate-800/80 border border-slate-700 space-y-2">
+                  <div className="w-6 h-6 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center justify-center">2</div>
+                  <h4 className="font-bold text-white text-sm">Paste Code.gs & Run Setup</h4>
+                  <p className="text-slate-400 text-[11px] leading-relaxed">
+                    Paste the script below. From the toolbar function dropdown, select <strong>setupAllTemplateSheets</strong> and click <strong>Run</strong>. All 7 tabs will be created instantly with headers and sample data!
                   </p>
                 </div>
 
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
-                  <span className="font-bold text-amber-700">Step 3: Deploy as Web App</span>
-                  <p className="text-slate-600">
-                    Click <strong>Deploy &gt; New deployment</strong>. Select <em>Web App</em>. Set <strong>Execute as:</strong> "Me", and <strong>Who has access:</strong> "Anyone". Copy the Web App URL into the box above!
+                <div className="p-4 rounded-xl bg-slate-800/80 border border-slate-700 space-y-2">
+                  <div className="w-6 h-6 rounded-full bg-amber-600 text-white font-bold text-xs flex items-center justify-center">3</div>
+                  <h4 className="font-bold text-white text-sm">Deploy Web App & Paste URL</h4>
+                  <p className="text-slate-400 text-[11px] leading-relaxed">
+                    Click <strong>Deploy &gt; New deployment &gt; Web app</strong>. Set <strong>Who has access: Anyone</strong>. Copy the resulting URL and paste it in the sync box above!
                   </p>
                 </div>
               </div>
 
-              {/* Copy Script Code Area */}
-              <div className="border border-slate-200 rounded-xl overflow-hidden mt-4">
-                <div className="bg-slate-800 text-slate-200 px-4 py-2.5 flex items-center justify-between text-xs font-bold">
-                  <span>Google Apps Script Backend Code (Code.gs)</span>
+              {/* Collapsible / Scrollable Code Viewer */}
+              <div className="border border-slate-700 rounded-xl overflow-hidden">
+                <div className="bg-slate-950 text-slate-300 px-4 py-2.5 flex items-center justify-between text-xs font-mono">
+                  <span>Google Apps Script Code (Code.gs) - Supports All 6 Templates + Settings</span>
                   <button
                     type="button"
                     onClick={handleCopyScriptCode}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors text-[11px]"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] font-sans"
                   >
-                    {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedCode ? 'Copied to Clipboard!' : 'Copy Code.gs'}</span>
+                    {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedCode ? 'Copied!' : 'Copy Code'}</span>
                   </button>
                 </div>
-                <pre className="p-4 bg-slate-900 text-slate-300 font-mono text-[11px] leading-relaxed max-h-72 overflow-y-auto">
+                <pre className="p-4 bg-slate-950/70 text-slate-300 font-mono text-[11px] leading-relaxed max-h-64 overflow-y-auto">
                   {GOOGLE_APPS_SCRIPT_CODE}
                 </pre>
               </div>
@@ -1312,6 +1637,169 @@ export const AdminDashboard: React.FC = () => {
                 Delete
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* TEMPLATE SAMPLE DATA & SCHEMA EXPLORER MODAL */}
+      {selectedTemplateForPreview && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-5xl w-full p-6 sm:p-7 space-y-6 my-8 shadow-2xl border border-slate-200">
+            
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-slate-100 pb-4 gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase rounded-md bg-blue-100 text-blue-800">
+                    {selectedTemplateForPreview.badge}
+                  </span>
+                  <span className="text-xs font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    Sheet Tab: {selectedTemplateForPreview.sheetTabName}
+                  </span>
+                </div>
+                <h3 className="text-lg font-black text-slate-900">
+                  {selectedTemplateForPreview.title}
+                </h3>
+                <span className="text-xs text-slate-500 font-medium">
+                  {selectedTemplateForPreview.hindiTitle} • {selectedTemplateForPreview.fileName}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <a
+                  href={`/api/templates/${selectedTemplateForPreview.id}.csv`}
+                  download={selectedTemplateForPreview.fileName}
+                  onClick={() => downloadCsvTemplate(selectedTemplateForPreview)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs shrink-0"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download .CSV</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => handleCopyTemplateHeaders(selectedTemplateForPreview)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition-colors shadow-2xs shrink-0"
+                >
+                  {copiedTemplateId === selectedTemplateForPreview.id ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                  <span>{copiedTemplateId === selectedTemplateForPreview.id ? 'Copied!' : 'Copy for Sheets'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTemplateForPreview(null)}
+                  className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center font-bold text-base transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Template Description */}
+            <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+              {selectedTemplateForPreview.description}
+            </p>
+
+            {/* Section 1: Columns Schema & Instructions */}
+            <div className="space-y-2.5">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <HelpCircle className="w-3.5 h-3.5 text-blue-600" />
+                <span>Column Field Requirements & Explanations ({selectedTemplateForPreview.columnsExplanation.length} Fields)</span>
+              </h4>
+
+              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs max-h-56 overflow-y-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 sticky top-0">
+                    <tr>
+                      <th className="px-3 py-2">Column Header</th>
+                      <th className="px-3 py-2">Requirement</th>
+                      <th className="px-3 py-2">Description / Guidance</th>
+                      <th className="px-3 py-2">Sample Value</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {selectedTemplateForPreview.columnsExplanation.map((col, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/80">
+                        <td className="px-3 py-2 font-mono font-bold text-blue-800 text-[11px]">
+                          {col.key}
+                        </td>
+                        <td className="px-3 py-2">
+                          {col.required ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800">
+                              Required *
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">
+                              Optional
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-slate-600 text-[11px]">
+                          {col.description}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-slate-500 text-[11px] truncate max-w-xs">
+                          {col.sample}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Section 2: Live Rendered Sample Rows Table */}
+            <div className="space-y-2.5">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                <Table className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Sample Data Rows Preview (as seen in Google Sheets)</span>
+              </h4>
+
+              <div className="border border-slate-200 rounded-xl overflow-x-auto shadow-2xs max-h-60 overflow-y-auto">
+                <table className="w-full text-left text-xs whitespace-nowrap">
+                  <thead className="bg-slate-800 text-slate-200 font-bold border-b border-slate-700 sticky top-0">
+                    <tr>
+                      <th className="px-2.5 py-2 font-mono text-[10px] text-slate-400">#</th>
+                      {selectedTemplateForPreview.headers.map(h => (
+                        <th key={h} className="px-3 py-2 font-mono text-[11px]">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {selectedTemplateForPreview.sampleRows.map((row, rIdx) => (
+                      <tr key={rIdx} className="hover:bg-slate-50">
+                        <td className="px-2.5 py-2 font-mono text-slate-400 text-[10px] bg-slate-50 border-r border-slate-200">
+                          {rIdx + 1}
+                        </td>
+                        {row.map((val, cIdx) => (
+                          <td key={cIdx} className="px-3 py-2 text-slate-800 text-xs">
+                            {String(val)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Modal Bottom Bar */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <span className="text-[11px] text-slate-500">
+                UTF-8 Devanagari formatted for MS Excel, Google Sheets, LibreOffice & Apple Numbers.
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedTemplateForPreview(null)}
+                className="px-5 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+              >
+                Close Preview
+              </button>
+            </div>
+
           </div>
         </div>
       )}

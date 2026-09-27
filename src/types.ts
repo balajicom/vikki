@@ -80,3 +80,67 @@ export interface AdminUser {
   status: string;
   created_at: string;
 }
+
+export interface PriceListItem {
+  price_id: string;
+  service_name: string;
+  category: string;
+  government_fee: string;
+  csc_service_fee: string;
+  total_fee: string;
+  processing_time: string;
+  eligibility_or_note?: string;
+  status?: string;
+}
+
+export interface NoticeItem {
+  notice_id: string;
+  title_en: string;
+  title_hi: string;
+  description_en: string;
+  description_hi: string;
+  category: string;
+  badge_type: 'Urgent' | 'New' | 'Important' | 'General';
+  last_date?: string;
+  action_link?: string;
+  status: 'Active' | 'Archived';
+  created_at: string;
+}
+
+export interface QuickLinkItem {
+  link_id: string;
+  portal_name: string;
+  department: string;
+  category: string;
+  portal_url: string;
+  description: string;
+  portal_login_type?: string;
+  required_credentials?: string;
+}
+
+export interface CitizenRecord {
+  citizen_id: string;
+  full_name: string;
+  father_name: string;
+  mobile: string;
+  aadhaar_last4: string;
+  village: string;
+  address: string;
+  services_availed: string;
+  notes?: string;
+  status: 'Active' | 'Pending Docs' | 'Completed';
+  created_at: string;
+}
+
+export interface SheetTemplateInfo {
+  id: string;
+  title: string;
+  hindiTitle: string;
+  description: string;
+  fileName: string;
+  sheetTabName: string;
+  badge: string;
+  headers: string[];
+  sampleRows: (string | number)[][];
+  columnsExplanation: { key: string; required: boolean; description: string; sample: string }[];
+}
