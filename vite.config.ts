@@ -4,7 +4,7 @@ import path from 'path';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/my-project/',
+  base: '/vikki/',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
