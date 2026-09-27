@@ -53,7 +53,7 @@ export const PrivacyPolicyPage: React.FC = () => {
                 <li>Contacting you via phone call or WhatsApp regarding your requested service</li>
                 <li>Explaining required documents and procedural steps for government portals</li>
                 <li>Updating you on the progress of your application</li>
-                <li>Scheduling in-person visits to our center in Sector 12, Noida</li>
+                <li>Scheduling in-person visits to our center in Gaini, Bareilly</li>
               </ul>
             </section>
 

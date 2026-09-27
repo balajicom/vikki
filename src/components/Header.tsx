@@ -10,12 +10,14 @@ export const Header: React.FC = () => {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const cleanWhatsApp = (settings.whatsapp_number || '919876543210').replace(/\D/g, '');
-  const cleanPhone = settings.phone_number || '+919876543210';
+  const cleanWhatsApp = (settings.whatsapp_number || '919870677605').replace(/\D/g, '');
+  const cleanPhone = settings.phone_number || '+919870677605';
 
   const navLinks = [
     { to: '/', label: t('navHome') },
     { to: '/services', label: t('navServices') },
+    { to: '/apply', label: language === 'hi' ? 'ऑनलाइन आवेदन' : 'Apply Online' },
+    { to: '/track', label: language === 'hi' ? 'आवेदन स्थिति' : 'Track Status' },
     { to: '/about', label: t('navAbout') },
     { to: '/how-it-works', label: t('navHowItWorks') },
     { to: '/documents', label: t('navDocuments') },
@@ -146,14 +148,13 @@ export const Header: React.FC = () => {
             <span>{t('whatsAppNow')}</span>
           </a>
 
-          <button
-            type="button"
-            id="btn-header-enquire-quick"
-            onClick={() => openEnquiryModal()}
+          <Link
+            to="/apply"
+            id="btn-header-apply-direct"
             className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-lg shadow-xs transition-colors"
           >
-            <span>{t('applyEnquire')}</span>
-          </button>
+            <span>{language === 'hi' ? 'ऑनलाइन आवेदन' : 'Apply Online'}</span>
+          </Link>
         </div>
 
         {/* Mobile Hamburger Toggle */}

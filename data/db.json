@@ -1,6 +1,49 @@
 {
   "services": [
     {
+      "service_id": "srv-muj5e5dp",
+      "service_name_en": "xxxxx",
+      "service_name_hi": "yyyyyyyyyyyyyyyyyyyyyyyyyy",
+      "category": "All",
+      "short_description_en": "zzzzzzzzzzzzzzzz",
+      "short_description_hi": "aaaaaaaaaaaaaaaaaa",
+      "full_description_en": "bbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "full_description_hi": "ccccccccccccc",
+      "required_documents": [
+        "Original Aadhaar Card",
+        "Registered Mobile Number"
+      ],
+      "icon": "CreditCard",
+      "status": "Active",
+      "popular": true,
+      "estimated_time": "1 to 3 Working Days",
+      "whatsapp_message": "Hello Balaji Communication, I want information about xxxxx.",
+      "created_at": "2026-09-27T01:37:12.684Z",
+      "updated_at": "2026-09-27T01:37:13.021Z"
+    },
+    {
+      "service_id": "srv-muj4xqyz",
+      "service_name_en": "PM Kisan Samman Nidhi E-KYC",
+      "service_name_hi": "पीएम किसान सम्मान निधि ई-केवाईसी",
+      "category": "Kisan & Agriculture",
+      "short_description_en": "Biometric & OTP Aadhaar e-KYC update for PM Kisan beneficiaries.",
+      "short_description_hi": "पीएम किसान योजना हेतु बायोमेट्रिक एवं ओटीपी आधारित ई-केवाईसी।",
+      "full_description_en": "",
+      "full_description_hi": "",
+      "required_documents": [
+        "Aadhaar Card",
+        "Mobile Linked with Aadhaar",
+        "Kisan Registration Number"
+      ],
+      "icon": "Users",
+      "status": "Active",
+      "popular": true,
+      "estimated_time": "1 to 3 Working Days",
+      "whatsapp_message": "Hello Balaji Communication, I want information about PM Kisan Samman Nidhi E-KYC.",
+      "created_at": "2026-09-27T01:23:50.603Z",
+      "updated_at": "2026-09-27T01:23:50.603Z"
+    },
+    {
       "service_id": "srv-aadhaar-mob",
       "service_name_en": "Aadhaar Mobile Number Update",
       "service_name_hi": "आधार मोबाइल नंबर अपडेट / जोड़ना",
@@ -359,125 +402,19 @@
   ],
   "enquiries": [
     {
-      "enquiry_id": "enq-mtzo85dk",
-      "customer_name": "xxxxxxxxxx",
-      "mobile": "8956569999",
+      "enquiry_id": "BALAJI-APP-2609-8367",
+      "customer_name": "nmmmmmmm",
+      "mobile": "8006494238",
+      "father_or_husband_name": "sdffffffff",
+      "address": "fssssssssdddddddddddddddddddddddddd",
       "service_id": "srv-aadhaar-mob",
       "service_name": "आधार मोबाइल नंबर अपडेट / जोड़ना",
-      "message": "uuuuuuiiuiuiuiuiiuiuijlklk",
-      "preferred_contact": "Call",
-      "status": "New",
-      "created_at": "2026-09-13T10:28:25.016Z"
-    },
-    {
-      "enquiry_id": "enq-mtznzyhr",
-      "customer_name": "jjlkjkjk",
-      "mobile": "3232323256",
-      "service_id": "srv-ayushman-card",
-      "service_name": "आयुष्मान भारत गोल्डन कार्ड (₹5 लाख मुफ्त इलाज)",
-      "message": "kbb,bmbmnbmn",
-      "preferred_contact": "Call",
-      "status": "Contacted",
-      "created_at": "2026-09-13T10:22:02.847Z"
-    },
-    {
-      "enquiry_id": "enq-mtl29aaq",
-      "customer_name": "jiyin",
-      "mobile": "5565554485",
-      "service_id": "srv-pan-card",
-      "service_name": "नया पैन कार्ड आवेदन एवं सुधार",
-      "message": "hkjhkjkkuy",
+      "category": "Aadhaar",
+      "message": "",
       "preferred_contact": "WhatsApp",
       "status": "New",
-      "created_at": "2026-09-03T05:04:40.034Z"
-    },
-    {
-      "enquiry_id": "enq-mtl1kujk",
-      "customer_name": "jitin kua",
-      "mobile": "6665656565",
-      "service_id": "srv-caste-cert",
-      "service_name": "जाति प्रमाण पत्र (SC / ST / OBC / EWS)",
-      "message": "nmjkjkkjkj",
-      "preferred_contact": "Call",
-      "status": "New",
-      "created_at": "2026-09-03T04:45:39.872Z"
-    },
-    {
-      "enquiry_id": "enq-mtl1hkht",
-      "customer_name": "jitin kumar",
-      "mobile": "8006494238",
-      "service_id": "srv-pmkisan-kyc",
-      "service_name": "पीएम किसान ई-केवाईसी एवं किस्त स्थिति जांच",
-      "message": "tesyting",
-      "preferred_contact": "Call",
-      "status": "New",
-      "created_at": "2026-09-03T04:43:06.881Z"
-    },
-    {
-      "enquiry_id": "enq-mtl0bt10",
-      "customer_name": "jitin kumar",
-      "mobile": "8006494238",
-      "service_id": "srv-voter-id",
-      "service_name": "वोटर आईडी (पहचान पत्र) नया आवेदन एवं संशोधन",
-      "message": "hbjjjjjjjjjjjjjjjjjjjjjjjjj",
-      "preferred_contact": "Call",
-      "status": "New",
-      "created_at": "2026-09-03T04:10:38.388Z"
-    },
-    {
-      "enquiry_id": "enq-mtkzdz1r",
-      "customer_name": "800649455",
-      "mobile": "0005656665",
-      "service_id": "srv-ayushman-card",
-      "service_name": "आयुष्मान भारत गोल्डन कार्ड (₹5 लाख मुफ्त इलाज)",
-      "message": "nkjhkjhkjhkjhkjhkhh",
-      "preferred_contact": "WhatsApp",
-      "status": "Contacted",
-      "created_at": "2026-09-03T03:44:19.887Z"
-    },
-    {
-      "enquiry_id": "enq-mtkyfjiw",
-      "customer_name": "Amit Kumar",
-      "mobile": "9876543210",
-      "service_id": "",
-      "service_name": "Aadhaar Mobile Number Update",
-      "message": "Testing enquiry submission",
-      "preferred_contact": "WhatsApp",
-      "status": "New",
-      "created_at": "2026-09-03T03:17:33.464Z"
-    },
-    {
-      "enquiry_id": "enq-101",
-      "customer_name": "Ramesh Sharma",
-      "mobile": "9812345670",
-      "service_id": "srv-aadhaar-mob",
-      "service_name": "Aadhaar Mobile Number Update",
-      "message": "Need urgent update for bank loan verification.",
-      "preferred_contact": "WhatsApp",
-      "status": "New",
-      "created_at": "2026-09-02T23:09:32.654Z"
-    },
-    {
-      "enquiry_id": "enq-102",
-      "customer_name": "Sunita Devi",
-      "mobile": "9876501234",
-      "service_id": "srv-ayushman-card",
-      "service_name": "Ayushman Card Apply & Download",
-      "message": "Have ration card, want to check if all family members qualify.",
-      "preferred_contact": "Call",
-      "status": "Contacted",
-      "created_at": "2026-09-02T01:09:32.654Z"
-    },
-    {
-      "enquiry_id": "enq-103",
-      "customer_name": "Amit Kumar",
-      "mobile": "9988776655",
-      "service_id": "srv-pmkisan-kyc",
-      "service_name": "PM Kisan e-KYC & Status Check",
-      "message": "16th installment not received, need eKYC biometric.",
-      "preferred_contact": "WhatsApp",
-      "status": "Processing",
-      "created_at": "2026-09-01T03:09:32.654Z"
+      "urgency": "Urgent",
+      "created_at": "2026-09-27T01:45:39.085Z"
     }
   ],
   "settings": {
@@ -489,8 +426,8 @@
     "whatsapp_number": "919870677605",
     "email": "vikkysingh9870677605@gmail.com",
     "address_en": "Shop, Masjid bali gali, Inter college road Gaini, Bareilly, Uttar Pradesh - 243302",
-    "address_hi": "दुकान नं. 4, मुख्य बाजार, सेंट्रल बैंक के पास, सेक्टर 12, नोएडा, उत्तर प्रदेश - 201301",
-    "google_maps_url": "https://maps.google.com/?q=Sector+12+Noida+Uttar+Pradesh",
+    "address_hi": "दुकान, मस्जिद वाली गली, इंटर कॉलेज रोड, गैनी, बरेली, उत्तर प्रदेश - 243302",
+    "google_maps_url": "https://maps.google.com/?q=Gaini+Bareilly+Uttar+Pradesh+243302",
     "opening_hours_en": "Mon - Sat: 9:00 AM - 8:00 PM | Sunday: 10:00 AM - 2:00 PM",
     "opening_hours_hi": "सोम - शनि: सुबह 9:00 - रात 8:00 | रविवार: सुबह 10:00 - दोपहर 2:00",
     "hero_headline_hi": "आपकी सभी ऑनलाइन सेवाएं, एक ही स्थान पर",

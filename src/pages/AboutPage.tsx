@@ -8,8 +8,8 @@ export const AboutPage: React.FC = () => {
   const { settings, openEnquiryModal } = useData();
   const { language, t } = useLanguage();
 
-  const cleanWhatsApp = (settings.whatsapp_number || '919876543210').replace(/\D/g, '');
-  const cleanPhone = settings.phone_number || '+919876543210';
+  const cleanWhatsApp = (settings.whatsapp_number || '919870677605').replace(/\D/g, '');
+  const cleanPhone = settings.phone_number || '+919870677605';
 
   return (
     <div id="about-page" className="min-h-screen bg-slate-50 py-12 sm:py-16">

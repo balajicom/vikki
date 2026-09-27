@@ -8,8 +8,8 @@ export const Footer: React.FC = () => {
   const { language, t } = useLanguage();
   const { settings } = useData();
 
-  const cleanWhatsApp = (settings.whatsapp_number || '919876543210').replace(/\D/g, '');
-  const cleanPhone = settings.phone_number || '+919876543210';
+  const cleanWhatsApp = (settings.whatsapp_number || '919870677605').replace(/\D/g, '');
+  const cleanPhone = settings.phone_number || '+919870677605';
 
   const categories = [
     { name: 'Aadhaar Services', filter: 'Aadhaar' },
@@ -77,6 +77,18 @@ export const Footer: React.FC = () => {
                 <Link to="/" className="hover:text-blue-400 flex items-center gap-1.5 transition-colors">
                   <ArrowRight className="w-3 h-3 text-slate-500" />
                   <span>{t('navHome')}</span>
+                </Link>
+              </li>
+              <li>
+                <Link to="/apply" className="hover:text-blue-400 flex items-center gap-1.5 transition-colors text-amber-300 font-bold">
+                  <ArrowRight className="w-3 h-3 text-amber-400" />
+                  <span>{language === 'hi' ? 'ऑनलाइन आवेदन' : 'Apply Online'}</span>
+                </Link>
+              </li>
+              <li>
+                <Link to="/track" className="hover:text-blue-400 flex items-center gap-1.5 transition-colors">
+                  <ArrowRight className="w-3 h-3 text-slate-500" />
+                  <span>{language === 'hi' ? 'आवेदन स्थिति ट्रैक करें' : 'Track Application'}</span>
                 </Link>
               </li>
               <li>

@@ -15,8 +15,8 @@ export const ServiceModal: React.FC = () => {
   const fullDesc = language === 'hi' ? selectedService.full_description_hi : selectedService.full_description_en;
   const otherDesc = language === 'hi' ? selectedService.full_description_en : selectedService.full_description_hi;
 
-  const cleanWhatsApp = (settings.whatsapp_number || '919876543210').replace(/\D/g, '');
-  const cleanPhone = settings.phone_number || '+919876543210';
+  const cleanWhatsApp = (settings.whatsapp_number || '919870677605').replace(/\D/g, '');
+  const cleanPhone = settings.phone_number || '+919870677605';
   const waMsg = selectedService.whatsapp_message || `Hello Balaji Communication, I want information about ${selectedService.service_name_en}.`;
 
   const handleApplyClick = () => {
@@ -161,7 +161,7 @@ export const ServiceModal: React.FC = () => {
             onClick={handleApplyClick}
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 text-xs sm:text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-lg shadow-sm transition-colors"
           >
-            <span>{t('applyEnquire')}</span>
+            <span>{language === 'hi' ? 'सीधे ऑनलाइन आवेदन करें' : 'Apply Online Now'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>

@@ -16,8 +16,8 @@ export const ContactPage: React.FC = () => {
   const [submitted, setSubmitted] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const cleanWhatsApp = (settings.whatsapp_number || '919876543210').replace(/\D/g, '');
-  const cleanPhone = settings.phone_number || '+919876543210';
+  const cleanWhatsApp = (settings.whatsapp_number || '919870677605').replace(/\D/g, '');
+  const cleanPhone = settings.phone_number || '+919870677605';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -187,7 +187,7 @@ export const ContactPage: React.FC = () => {
               <div className="relative w-full h-56 rounded-xl overflow-hidden bg-slate-200">
                 <iframe
                   title="Balaji Communication Center Location"
-                  src="https://maps.google.com/maps?q=Sector%2012%20Noida%20Uttar%20Pradesh&t=&z=14&ie=UTF8&iwloc=&output=embed"
+                  src="https://maps.google.com/maps?q=Gaini%20Bareilly%20Uttar%20Pradesh%20243302&t=&z=14&ie=UTF8&iwloc=&output=embed"
                   className="w-full h-full border-0"
                   loading="lazy"
                   allowFullScreen

@@ -10,7 +10,7 @@ export const Hero: React.FC = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
 
-  const cleanWhatsApp = (settings.whatsapp_number || '919876543210').replace(/\D/g, '');
+  const cleanWhatsApp = (settings.whatsapp_number || '919870677605').replace(/\D/g, '');
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,21 +93,20 @@ export const Hero: React.FC = () => {
             {/* Action Buttons */}
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <Link
-                to="/services"
-                id="btn-hero-view-services"
+                to="/apply"
+                id="btn-hero-apply-direct"
                 className="inline-flex items-center gap-2 px-6 py-3 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-xl shadow-md hover:shadow-lg transition-all"
               >
-                <span>{t('viewServices')}</span>
+                <span>{language === 'hi' ? 'सीधे ऑनलाइन आवेदन करें' : 'Apply Online Now'}</span>
                 <ArrowRight className="w-4 h-4" />
               </Link>
 
               <Link
-                to="/contact"
-                id="btn-hero-contact-us"
+                to="/services"
+                id="btn-hero-view-services"
                 className="inline-flex items-center gap-2 px-5 py-3 text-sm font-bold text-slate-800 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl shadow-xs transition-colors"
               >
-                <Phone className="w-4 h-4 text-blue-700" />
-                <span>{t('navContact')}</span>
+                <span>{t('viewServices')}</span>
               </Link>
 
               <a
@@ -221,7 +220,7 @@ export const Hero: React.FC = () => {
                   <span className="w-2 h-2 rounded-full bg-emerald-500" />
                   <span>Open 6 Days a Week</span>
                 </div>
-                <span className="font-bold text-blue-700">Sector 12, Noida</span>
+                <span className="font-bold text-blue-700">Gaini, Bareilly</span>
               </div>
             </div>
           </div>

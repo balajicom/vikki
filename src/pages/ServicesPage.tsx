@@ -79,7 +79,7 @@ export const ServicesPage: React.FC = () => {
     });
   }, [services, selectedCategory, searchQuery]);
 
-  const cleanWhatsApp = (settings.whatsapp_number || '919876543210').replace(/\D/g, '');
+  const cleanWhatsApp = (settings.whatsapp_number || '919870677605').replace(/\D/g, '');
 
   return (
     <div id="services-page" className="min-h-screen bg-slate-50 py-10 sm:py-14">

@@ -16,6 +16,8 @@ import { DocumentsPage } from './pages/DocumentsPage';
 import { ContactPage } from './pages/ContactPage';
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { TermsPage } from './pages/TermsPage';
+import { DirectApplicationPage } from './pages/DirectApplicationPage';
+import { TrackApplicationPage } from './pages/TrackApplicationPage';
 import { AdminLogin } from './pages/admin/AdminLogin';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 
@@ -50,6 +52,8 @@ export default function App() {
                 <Route path="/contact" element={<ContactPage />} />
                 <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
                 <Route path="/terms" element={<TermsPage />} />
+                <Route path="/apply" element={<DirectApplicationPage />} />
+                <Route path="/track" element={<TrackApplicationPage />} />
 
                 {/* Admin Routes */}
                 <Route path="/admin" element={<AdminLogin />} />

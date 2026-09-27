@@ -7,7 +7,7 @@ export const DocumentsPage: React.FC = () => {
   const { language, t } = useLanguage();
   const { settings, openEnquiryModal } = useData();
 
-  const cleanWhatsApp = (settings.whatsapp_number || '919876543210').replace(/\D/g, '');
+  const cleanWhatsApp = (settings.whatsapp_number || '919870677605').replace(/\D/g, '');
 
   const guides = [
     {

@@ -11,8 +11,8 @@ export const HomePage: React.FC = () => {
   const { language, t } = useLanguage();
   const { settings, openEnquiryModal } = useData();
 
-  const cleanWhatsApp = (settings.whatsapp_number || '919876543210').replace(/\D/g, '');
-  const cleanPhone = settings.phone_number || '+919876543210';
+  const cleanWhatsApp = (settings.whatsapp_number || '919870677605').replace(/\D/g, '');
+  const cleanPhone = settings.phone_number || '+919870677605';
 
   return (
     <div id="home-page" className="flex flex-col">
@@ -62,13 +62,13 @@ export const HomePage: React.FC = () => {
                   <span>{language === 'hi' ? 'अधिक जानकारी पढ़ें' : 'Read More About Us'}</span>
                   <ArrowRight className="w-4 h-4" />
                 </Link>
-                <button
-                  type="button"
-                  onClick={() => openEnquiryModal()}
-                  className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition-colors"
+                <Link
+                  to="/apply"
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-800 text-xs font-bold rounded-xl transition-colors border border-blue-200"
                 >
-                  <span>{t('applyEnquire')}</span>
-                </button>
+                  <span>{language === 'hi' ? 'सीधे ऑनलाइन आवेदन करें' : 'Apply Online Now'}</span>
+                  <ArrowRight className="w-4 h-4 text-blue-700" />
+                </Link>
               </div>
             </div>
 

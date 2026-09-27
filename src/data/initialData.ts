@@ -6,11 +6,11 @@ export const INITIAL_SETTINGS: WebsiteSettings = {
   subtitle_en: "Jan Seva Kendra | Digital Service Center",
   subtitle_hi: "जन सेवा केंद्र | डिजिटल सेवा केंद्र",
   phone_number: "+919870677605",
-  whatsapp_number: "+919870677605",
+  whatsapp_number: "919870677605",
   email: "vikkysingh9870677605@gmail.com",
-  address_en: "Shop, Masjid bali gali, Near Inter college road Gaini, Bareilly, Uttar Pradesh - 243302",
-  address_hi: "दुकान, मस्जिद बाली गली के पास, इंटर कॉलेज रोड, गैनी, बरेली, उत्तर प्रदेश - 243302",
-  google_maps_url: "https://maps.google.com/?q=gaini+Uttar+Pradesh",
+  address_en: "Shop, Masjid bali gali, Inter college road Gaini, Bareilly, Uttar Pradesh - 243302",
+  address_hi: "दुकान, मस्जिद वाली गली, इंटर कॉलेज रोड, गैनी, बरेली, उत्तर प्रदेश - 243302",
+  google_maps_url: "https://maps.google.com/?q=Gaini+Bareilly+Uttar+Pradesh+243302",
   opening_hours_en: "Mon - Sat: 9:00 AM - 8:00 PM | Sunday: 10:00 AM - 2:00 PM",
   opening_hours_hi: "सोम - शनि: सुबह 9:00 - रात 8:00 | रविवार: सुबह 10:00 - दोपहर 2:00",
   hero_headline_hi: "आपकी सभी ऑनलाइन सेवाएं, एक ही स्थान पर",
@@ -23,7 +23,7 @@ export const INITIAL_SETTINGS: WebsiteSettings = {
   about_us_en: "Balaji Communication is a local digital service center providing assistance with government schemes, identity documents, online applications and various digital services. Our mission is to provide transparent, prompt and reliable assistance for citizens.",
   footer_text_hi: "बालाजी कम्युनिकेशन एक स्वतंत्र डिजिटल सेवा सहायता केंद्र है और यह कोई आधिकारिक सरकारी वेबसाइट नहीं है। सभी सरकारी सेवाएं संबंधित विभाग के नियमों के अधीन हैं।",
   footer_text_en: "Balaji Communication is an independent digital service assistance center and is not an official government website. All government services are subject to rules of the respective departments.",
-  google_sheet_webapp_url: "https://script.google.com/macros/s/AKfycbyMq1jgZQjvd-m85_w2YaMZ0kwYIPexpO1ZUPlU8RwZs1ayGWrA56afiBwzuMPW_70D/exec"
+  google_sheet_webapp_url: ""
 };
 
 export const INITIAL_SERVICES: Service[] = [

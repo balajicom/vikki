@@ -25,13 +25,20 @@ export type EnquiryStatus = 'New' | 'Contacted' | 'Processing' | 'Completed' | '
 export interface Enquiry {
   enquiry_id: string;
   customer_name: string;
+  applicant_name?: string;
+  father_or_husband_name?: string;
+  address?: string;
+  village?: string;
   mobile: string;
   service_id?: string;
   service_name: string;
+  category?: string;
   message: string;
   preferred_contact: 'Call' | 'WhatsApp';
+  urgency?: string;
   status: EnquiryStatus;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface WebsiteSettings {
@@ -59,6 +66,8 @@ export interface WebsiteSettings {
   footer_text_en: string;
   google_sheet_webapp_url?: string;
   google_sheet_web_app_url?: string;
+  google_sheet_url?: string;
+  last_sheet_sync?: string;
 }
 
 export type SiteSettings = WebsiteSettings;

@@ -19,6 +19,7 @@ import {
   LogOut,
   Save,
   AlertTriangle,
+  AlertCircle,
   Search,
   Eye,
   EyeOff
@@ -37,6 +38,7 @@ export const AdminDashboard: React.FC = () => {
     settings,
     categories,
     addService,
+    createService,
     updateService,
     deleteService,
     updateEnquiryStatus,
@@ -53,6 +55,10 @@ export const AdminDashboard: React.FC = () => {
   // Service Edit / Create Modal State
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
+  const [isSavingService, setIsSavingService] = useState(false);
+  const [serviceError, setServiceError] = useState<string | null>(null);
+  const [serviceSuccessToast, setServiceSuccessToast] = useState<string | null>(null);
+  const [serviceToDelete, setServiceToDelete] = useState<Service | null>(null);
   const [serviceForm, setServiceForm] = useState<Partial<Service>>({
     service_id: '',
     category: 'Aadhaar',
@@ -107,8 +113,9 @@ export const AdminDashboard: React.FC = () => {
   // Open Service Add Form
   const handleOpenAddService = () => {
     setEditingServiceId(null);
+    setServiceError(null);
     setServiceForm({
-      service_id: `service_${Date.now()}`,
+      service_id: `srv-${Date.now().toString(36)}`,
       category: categories[0] || 'General Services',
       service_name_en: '',
       service_name_hi: '',
@@ -130,6 +137,7 @@ export const AdminDashboard: React.FC = () => {
   // Open Service Edit Form
   const handleOpenEditService = (service: Service) => {
     setEditingServiceId(service.service_id);
+    setServiceError(null);
     setServiceForm({ ...service });
     setDocsInput(service.required_documents ? service.required_documents.join('\n') : '');
     setIsServiceModalOpen(true);
@@ -138,29 +146,85 @@ export const AdminDashboard: React.FC = () => {
   // Save Service
   const handleSaveService = async (e: React.FormEvent) => {
     e.preventDefault();
-    const docs = docsInput
-      .split('\n')
-      .map(d => d.trim())
-      .filter(d => d.length > 0);
+    setServiceError(null);
 
-    const serviceData: Service = {
-      ...(serviceForm as Service),
-      required_documents: docs,
-      updated_at: new Date().toISOString()
-    };
+    const nameEn = serviceForm.service_name_en?.trim() || '';
+    const nameHi = serviceForm.service_name_hi?.trim() || '';
 
-    if (editingServiceId) {
-      await updateService(editingServiceId, serviceData);;
-    } else {
-      await addService(serviceData);
+    if (!nameEn && !nameHi) {
+      setServiceError('Please enter service name in English or Hindi.');
+      return;
     }
-    setIsServiceModalOpen(false);
+
+    const finalNameEn = nameEn || nameHi;
+    const finalNameHi = nameHi || nameEn;
+
+    setIsSavingService(true);
+    try {
+      const docs = docsInput
+        .split('\n')
+        .map(d => d.trim())
+        .filter(d => d.length > 0);
+
+      const serviceData: Service = {
+        service_id: editingServiceId || serviceForm.service_id || `srv-${Date.now().toString(36)}`,
+        service_name_en: finalNameEn,
+        service_name_hi: finalNameHi,
+        category: serviceForm.category?.trim() || categories[0] || 'General Services',
+        short_description_en: serviceForm.short_description_en?.trim() || serviceForm.short_description_hi?.trim() || '',
+        short_description_hi: serviceForm.short_description_hi?.trim() || serviceForm.short_description_en?.trim() || '',
+        full_description_en: serviceForm.full_description_en?.trim() || serviceForm.short_description_en?.trim() || '',
+        full_description_hi: serviceForm.full_description_hi?.trim() || serviceForm.short_description_hi?.trim() || '',
+        required_documents: docs.length > 0 ? docs : ['Original Aadhaar Card', 'Registered Mobile Number'],
+        icon: serviceForm.icon || 'CreditCard',
+        status: (serviceForm.status as 'Active' | 'Disabled') || 'Active',
+        popular: Boolean(serviceForm.popular),
+        estimated_time: serviceForm.estimated_time?.trim() || '1 to 3 Working Days',
+        whatsapp_message: serviceForm.whatsapp_message?.trim() || `Hello Balaji Communication, I want information about ${finalNameEn}.`,
+        created_at: serviceForm.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      let success = false;
+      if (editingServiceId) {
+        success = await updateService(editingServiceId, serviceData);
+      } else {
+        const saver = addService || createService;
+        success = await saver(serviceData);
+      }
+
+      if (success) {
+        setIsServiceModalOpen(false);
+        setServiceSuccessToast(editingServiceId ? 'Service updated successfully!' : 'New service added and published live successfully!');
+        setTimeout(() => setServiceSuccessToast(null), 4000);
+      } else {
+        setServiceError('Could not save service. Please verify fields and try again.');
+      }
+    } catch (err: any) {
+      console.error('Error saving service:', err);
+      setServiceError(err.message || 'An error occurred while saving service.');
+    } finally {
+      setIsSavingService(false);
+    }
   };
 
   // Toggle Service Active status directly
   const handleToggleServiceStatus = async (service: Service) => {
     const updatedStatus = service.status === 'Active' ? 'Disabled' : 'Active';
-   await updateService(service.service_id, {...service,status: updatedStatus,updated_at: new Date().toISOString(),});};
+    await updateService(service.service_id, { ...service, status: updatedStatus });
+    setServiceSuccessToast(`Service "${service.service_name_en}" marked as ${updatedStatus}.`);
+    setTimeout(() => setServiceSuccessToast(null), 3000);
+  };
+
+  // Safe delete handler without window.confirm
+  const handleConfirmDeleteService = async () => {
+    if (!serviceToDelete) return;
+    const name = serviceToDelete.service_name_en;
+    await deleteService(serviceToDelete.service_id);
+    setServiceToDelete(null);
+    setServiceSuccessToast(`Service "${name}" deleted.`);
+    setTimeout(() => setServiceSuccessToast(null), 3000);
+  };
 
   // Save Site Settings
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -358,6 +422,22 @@ export const AdminDashboard: React.FC = () => {
         {/* TAB 1: SERVICES MANAGEMENT */}
         {activeTab === 'services' && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-5">
+            {serviceSuccessToast && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{serviceSuccessToast}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setServiceSuccessToast(null)}
+                  className="text-emerald-700 hover:text-emerald-900 font-bold text-sm"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">
@@ -458,11 +538,7 @@ export const AdminDashboard: React.FC = () => {
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              if (window.confirm(`Are you sure you want to delete "${service.service_name_en}"?`)) {
-                                deleteService(service.service_id);
-                              }
-                            }}
+                            onClick={() => setServiceToDelete(service)}
                             className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
                             title="Delete Service"
                           >
@@ -514,9 +590,9 @@ export const AdminDashboard: React.FC = () => {
               <table className="w-full text-left text-xs text-slate-700">
                 <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[11px]">
                   <tr>
-                    <th className="p-3.5">Customer Name</th>
-                    <th className="p-3.5">Mobile Number</th>
-                    <th className="p-3.5">Service Requested</th>
+                    <th className="p-3.5">Applicant & Ref ID</th>
+                    <th className="p-3.5">Mobile & Address</th>
+                    <th className="p-3.5">Service & Priority</th>
                     <th className="p-3.5">Date & Pref</th>
                     <th className="p-3.5">Status</th>
                     <th className="p-3.5 text-right">Actions</th>
@@ -528,10 +604,20 @@ export const AdminDashboard: React.FC = () => {
                       const cleanMob = (enq.mobile || '').replace(/\D/g, '');
                       return (
                         <tr key={enq.enquiry_id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="p-3.5 font-bold text-slate-900">
-                            {enq.customer_name}
+                          <td className="p-3.5">
+                            <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 block w-fit mb-1">
+                              {enq.enquiry_id}
+                            </span>
+                            <div className="font-bold text-slate-900 text-xs sm:text-sm">
+                              {enq.customer_name}
+                            </div>
+                            {enq.father_or_husband_name && (
+                              <div className="text-[11px] text-slate-500">
+                                S/O, W/O: {enq.father_or_husband_name}
+                              </div>
+                            )}
                             {enq.message && (
-                              <p className="text-[11px] font-normal text-slate-500 mt-0.5 max-w-xs line-clamp-1">
+                              <p className="text-[11px] font-normal text-slate-500 mt-1 max-w-xs line-clamp-1 italic">
                                 "{enq.message}"
                               </p>
                             )}
@@ -549,7 +635,7 @@ export const AdminDashboard: React.FC = () => {
                               </a>
                               {/* Quick WhatsApp */}
                               <a
-                                href={`https://wa.me/91${cleanMob}?text=${encodeURIComponent(`Hello ${enq.customer_name}, this is Balaji Communication regarding your request for ${enq.service_name}.`)}`}
+                                href={`https://wa.me/91${cleanMob}?text=${encodeURIComponent(`Hello ${enq.customer_name}, this is Balaji Communication regarding your application ${enq.enquiry_id} for ${enq.service_name}.`)}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 title="WhatsApp Citizen"
@@ -558,11 +644,21 @@ export const AdminDashboard: React.FC = () => {
                                 <MessageCircle className="w-3 h-3 fill-emerald-600" />
                               </a>
                             </div>
+                            {enq.address && (
+                              <div className="text-[11px] text-slate-600 mt-1 truncate max-w-xs">
+                                📍 {enq.address}
+                              </div>
+                            )}
                           </td>
                           <td className="p-3.5">
-                            <span className="font-semibold text-slate-900">
+                            <div className="font-semibold text-slate-900">
                               {enq.service_name}
-                            </span>
+                            </div>
+                            {enq.urgency && enq.urgency !== 'Normal' && (
+                              <span className="inline-block mt-1 px-1.5 py-0.5 text-[10px] font-extrabold bg-rose-100 text-rose-800 rounded">
+                                {enq.urgency}
+                              </span>
+                            )}
                           </td>
                           <td className="p-3.5 text-slate-500">
                             <div>{enq.created_at ? new Date(enq.created_at).toLocaleDateString() : 'Recent'}</div>
@@ -687,7 +783,7 @@ export const AdminDashboard: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    WhatsApp Number (with country code, e.g. 919876543210)
+                    WhatsApp Number (with country code, e.g. 919870677605)
                   </label>
                   <input
                     type="text"
@@ -847,13 +943,31 @@ export const AdminDashboard: React.FC = () => {
 
             {/* Sync URL Configuration Box */}
             <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl space-y-4">
-              <h3 className="text-sm font-bold text-slate-900">
-                Google Apps Script Web App Deployment URL
-              </h3>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Google Spreadsheet Link or Apps Script Web App URL
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Supports public Google Sheets (Share &gt; Anyone with link can view) OR Google Apps Script Web App URLs.
+                  </p>
+                </div>
+
+                <a
+                  href="/api/export-services-csv"
+                  download="balaji_services.csv"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg shadow-2xs transition-colors shrink-0"
+                  title="Download CSV formatted with all services to easily import into Google Sheets"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Download Services CSV Template</span>
+                </a>
+              </div>
+
               <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="url"
-                  placeholder="https://script.google.com/macros/s/.../exec"
+                  placeholder="https://docs.google.com/spreadsheets/d/... OR https://script.google.com/macros/s/.../exec"
                   value={sheetsUrlInput}
                   onChange={(e) => setSheetsUrlInput(e.target.value)}
                   className="flex-1 px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
@@ -866,13 +980,24 @@ export const AdminDashboard: React.FC = () => {
                   className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors inline-flex items-center justify-center gap-2 shrink-0 disabled:opacity-60"
                 >
                   <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                  <span>{isSyncing ? 'Connecting & Syncing...' : 'Save & Sync Now'}</span>
+                  <span>{isSyncing ? 'Connecting & Syncing...' : 'Fetch & Sync Now'}</span>
                 </button>
               </div>
 
               {syncStatusMsg && (
-                <div className="p-3 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-800">
+                <div className={`p-3 rounded-lg text-xs font-medium border ${
+                  syncStatusMsg.toLowerCase().includes('success') || syncStatusMsg.toLowerCase().includes('imported') || syncStatusMsg.toLowerCase().includes('loaded')
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-amber-50 border-amber-200 text-amber-800'
+                }`}>
                   {syncStatusMsg}
+                </div>
+              )}
+
+              {settings.last_sheet_sync && (
+                <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Last synced from Google Sheet on: {new Date(settings.last_sheet_sync).toLocaleString()}</span>
                 </div>
               )}
             </div>
@@ -949,6 +1074,13 @@ export const AdminDashboard: React.FC = () => {
                 ✕
               </button>
             </div>
+
+            {serviceError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{serviceError}</span>
+              </div>
+            )}
 
             <form onSubmit={handleSaveService} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1124,20 +1256,62 @@ export const AdminDashboard: React.FC = () => {
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
                 <button
                   type="button"
+                  disabled={isSavingService}
                   onClick={() => setIsServiceModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg"
+                  className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   id="btn-modal-save-service"
-                  className="px-5 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-lg shadow-xs"
+                  disabled={isSavingService}
+                  className="px-5 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-lg shadow-xs flex items-center gap-1.5 disabled:opacity-60 cursor-pointer"
                 >
-                  {editingServiceId ? 'Update Service' : 'Save & Publish Service'}
+                  {isSavingService ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Saving Service...</span>
+                    </>
+                  ) : (
+                    <span>{editingServiceId ? 'Update Service' : 'Save & Publish Service'}</span>
+                  )}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* SERVICE DELETE CONFIRMATION DIALOG (Safe alternative to window.confirm) */}
+      {serviceToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl border border-slate-200">
+            <div className="w-12 h-12 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-bold text-slate-900">Delete Service</h3>
+              <p className="text-xs text-slate-500">
+                Are you sure you want to remove <strong>"{serviceToDelete.service_name_en}"</strong>? This will remove it from the citizen portal.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setServiceToDelete(null)}
+                className="flex-1 px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteService}
+                className="flex-1 px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-xs transition-colors"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}

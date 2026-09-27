@@ -71,7 +71,7 @@ export const TermsPage: React.FC = () => {
             <section className="space-y-2">
               <h2 className="text-base sm:text-lg font-bold text-slate-900">5. Jurisdiction</h2>
               <p>
-                Any claims or disputes arising in connection with services rendered by Balaji Communication Jan Seva Kendra are subject to the competent courts of Gautam Buddha Nagar (Noida), Uttar Pradesh, India.
+                Any claims or disputes arising in connection with services rendered by Balaji Communication Jan Seva Kendra are subject to the competent courts of Bareilly, Uttar Pradesh, India.
               </p>
             </section>
           </div>

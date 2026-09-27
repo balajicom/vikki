@@ -17,7 +17,7 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({ service }) => {
   const secondaryTitle = language === 'hi' ? service.service_name_en : service.service_name_hi;
   const description = language === 'hi' ? service.short_description_hi : service.short_description_en;
 
-  const cleanWhatsApp = (settings.whatsapp_number || '919876543210').replace(/\D/g, '');
+  const cleanWhatsApp = (settings.whatsapp_number || '919870677605').replace(/\D/g, '');
   const waMsg = service.whatsapp_message || `Hello Balaji Communication, I want information about ${service.service_name_en}.`;
 
   return (
@@ -91,7 +91,7 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({ service }) => {
             onClick={() => openEnquiryModal(service)}
             className="w-full py-2 px-2.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 active:bg-blue-900 rounded-lg transition-colors text-center shadow-xs"
           >
-            {t('applyEnquire')}
+            {language === 'hi' ? 'ऑनलाइन आवेदन' : 'Apply Online'}
           </button>
         </div>
 

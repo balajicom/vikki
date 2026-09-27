@@ -20,7 +20,7 @@ interface DatabaseSchema {
   settings: WebsiteSettings;
   adminCredentials: {
     email: string;
-    passwordHash: string; // simulated hash
+    passwordHash: string;
   };
 }
 
@@ -32,50 +32,21 @@ function loadDatabase(): DatabaseSchema {
     }
     if (fs.existsSync(DB_FILE)) {
       const raw = fs.readFileSync(DB_FILE, 'utf-8');
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      // Ensure Gaini Bareilly info if older data exists
+      if (!parsed.settings.address_en || parsed.settings.address_en.includes('Sector 12')) {
+        parsed.settings = { ...parsed.settings, ...INITIAL_SETTINGS };
+      }
+      return parsed;
     }
   } catch (err) {
     console.error('Error reading db.json, falling back to defaults:', err);
   }
 
-  // Initial seed
+  // Initial seed (clean live application, no dummy test enquiries)
   const initialDb: DatabaseSchema = {
     services: INITIAL_SERVICES,
-    enquiries: [
-      {
-        enquiry_id: "enq-101",
-        customer_name: "Ramesh Sharma",
-        mobile: "9812345670",
-        service_id: "srv-aadhaar-mob",
-        service_name: "Aadhaar Mobile Number Update",
-        message: "Need urgent update for bank loan verification.",
-        preferred_contact: "WhatsApp",
-        status: "New",
-        created_at: new Date(Date.now() - 3600000 * 4).toISOString()
-      },
-      {
-        enquiry_id: "enq-102",
-        customer_name: "Sunita Devi",
-        mobile: "9876501234",
-        service_id: "srv-ayushman-card",
-        service_name: "Ayushman Card Apply & Download",
-        message: "Have ration card, want to check if all family members qualify.",
-        preferred_contact: "Call",
-        status: "Contacted",
-        created_at: new Date(Date.now() - 3600000 * 26).toISOString()
-      },
-      {
-        enquiry_id: "enq-103",
-        customer_name: "Amit Kumar",
-        mobile: "9988776655",
-        service_id: "srv-pmkisan-kyc",
-        service_name: "PM Kisan e-KYC & Status Check",
-        message: "16th installment not received, need eKYC biometric.",
-        preferred_contact: "WhatsApp",
-        status: "Processing",
-        created_at: new Date(Date.now() - 3600000 * 48).toISOString()
-      }
-    ],
+    enquiries: [],
     settings: INITIAL_SETTINGS,
     adminCredentials: {
       email: "admin@balaji.com",
@@ -92,12 +63,12 @@ function loadDatabase(): DatabaseSchema {
   return initialDb;
 }
 
-function saveDatabase(db: DatabaseSchema) {
+function saveDatabase(database: DatabaseSchema) {
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
-    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+    fs.writeFileSync(DB_FILE, JSON.stringify(database, null, 2));
   } catch (err) {
     console.error('Error saving db.json:', err);
   }
@@ -110,30 +81,304 @@ let db = loadDatabase();
 const ADMIN_TOKEN = "balaji_secure_admin_session_token_2026";
 
 function checkAdminAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.includes(ADMIN_TOKEN)) {
-    return res.status(401).json({ error: "Unauthorized access. Please login as admin." });
+  const authHeader = req.headers.authorization || '';
+  const tokenQuery = (req.query.token as string) || '';
+  const tokenBody = (req.body && req.body.token as string) || '';
+
+  if (authHeader.includes(ADMIN_TOKEN) || tokenQuery === ADMIN_TOKEN || tokenBody === ADMIN_TOKEN) {
+    return next();
   }
-  next();
+  return res.status(401).json({ error: "Unauthorized access. Please login as admin." });
+}
+
+// Helper: Parse CSV text into array of objects
+function parseCsvToObjects(csvText: string): Record<string, string>[] {
+  const lines = csvText.split(/\r?\n/).filter(line => line.trim().length > 0);
+  if (lines.length < 2) return [];
+
+  const parseLine = (line: string): string[] => {
+    const values: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        values.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    values.push(current.trim());
+    return values;
+  };
+
+  const headers = parseLine(lines[0]).map(h => h.trim().toLowerCase().replace(/[\s_-]+/g, '_'));
+  const rows: Record<string, string>[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const values = parseLine(lines[i]);
+    const obj: Record<string, string> = {};
+    headers.forEach((header, idx) => {
+      obj[header] = values[idx] || '';
+    });
+    rows.push(obj);
+  }
+
+  return rows;
+}
+
+// Helper: Map raw row data to standardized Service interface
+function mapRowToService(row: Record<string, any>, idx: number): Service | null {
+  const nameEn = row.service_name_en || row.service_name || row.name_en || row.name || row.title || '';
+  if (!nameEn) return null;
+
+  const id = row.service_id || row.id || `srv-sheet-${idx + 1}`;
+  const nameHi = row.service_name_hi || row.name_hi || nameEn;
+  const category = row.category || 'General Services';
+  const shortEn = row.short_description_en || row.short_desc || row.short_description || row.description || '';
+  const shortHi = row.short_description_hi || row.short_desc_hi || shortEn;
+  const fullEn = row.full_description_en || row.full_description || row.long_description || shortEn;
+  const fullHi = row.full_description_hi || row.full_description || shortHi;
+
+  let docs: string[] = [];
+  const rawDocs = row.required_documents || row.documents || row.docs || '';
+  if (Array.isArray(rawDocs)) {
+    docs = rawDocs;
+  } else if (typeof rawDocs === 'string' && rawDocs.trim()) {
+    docs = rawDocs.split(/[\n,;]+/).map(d => d.trim()).filter(Boolean);
+  }
+
+  return {
+    service_id: String(id),
+    service_name_en: String(nameEn),
+    service_name_hi: String(nameHi),
+    category: String(category),
+    short_description_en: String(shortEn),
+    short_description_hi: String(shortHi),
+    full_description_en: String(fullEn),
+    full_description_hi: String(fullHi),
+    required_documents: docs.length > 0 ? docs : ['Original Aadhaar Card', 'Registered Mobile Number'],
+    icon: row.icon || 'FileText',
+    status: (row.status && row.status.toLowerCase() === 'disabled') ? 'Disabled' : 'Active',
+    popular: Boolean(row.popular === true || row.popular === 'true' || row.popular === 'yes' || row.popular === 1),
+    estimated_time: row.estimated_time || '1 to 3 Working Days',
+    whatsapp_message: row.whatsapp_message || `Hello Balaji Communication, I want information about ${nameEn}.`,
+    created_at: row.created_at || new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+}
+
+// Master Google Sheets Sync Function (Handles both Google Spreadsheet links & Web App URLs)
+async function syncFromGoogleSource(inputUrl: string): Promise<{
+  success: boolean;
+  message: string;
+  count?: number;
+  services?: Service[];
+  sourceType?: 'spreadsheet' | 'webapp';
+}> {
+  const url = inputUrl.trim();
+  if (!url) {
+    return { success: false, message: 'Google Sheets or Web App URL is required.' };
+  }
+
+  // Check if standard Google Spreadsheet Link
+  const sheetMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/i);
+
+  if (sheetMatch) {
+    const sheetId = sheetMatch[1];
+    const gidMatch = url.match(/[?#&]gid=([0-9]+)/i);
+    const gid = gidMatch ? gidMatch[1] : '0';
+
+    // Helper to merge imported services with existing ones
+    const applyMergedServices = (importedServices: Service[], sourceType: 'spreadsheet' | 'webapp') => {
+      const sheetServiceIds = new Set(importedServices.map(s => s.service_id));
+      const existingRetained = db.services.filter(s => !sheetServiceIds.has(s.service_id));
+      db.services = [...importedServices, ...existingRetained];
+      db.settings.google_sheet_webapp_url = url;
+      db.settings.google_sheet_url = url;
+      db.settings.last_sheet_sync = new Date().toISOString();
+      saveDatabase(db);
+      return {
+        success: true,
+        message: `Successfully connected to Google Sheet! Imported ${importedServices.length} services (Total catalog: ${db.services.length} services).`,
+        count: importedServices.length,
+        sourceType,
+        services: db.services
+      };
+    };
+
+    // Attempt 1: Fetch through Google Visualization Query API (JSON format)
+    const gvizUrlsToTry = [
+      `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=Services`,
+      `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=${gid}`,
+      `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json`
+    ];
+
+    for (const gvizUrl of gvizUrlsToTry) {
+      try {
+        const gvizRes = await fetch(gvizUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        if (!gvizRes.ok) continue;
+        const gvizText = await gvizRes.text();
+
+        const jsonStart = gvizText.indexOf('{');
+        const jsonEnd = gvizText.lastIndexOf('}');
+        if (jsonStart !== -1 && jsonEnd !== -1) {
+          const jsonStr = gvizText.substring(jsonStart, jsonEnd + 1);
+          const parsed = JSON.parse(jsonStr);
+          if (parsed.table && parsed.table.rows && parsed.table.rows.length > 0) {
+            const cols: string[] = (parsed.table.cols || []).map((c: any) => 
+              (c.label || c.id || '').toLowerCase().replace(/[\s_-]+/g, '_')
+            );
+
+            const parsedServices: Service[] = [];
+            parsed.table.rows.forEach((r: any, rIdx: number) => {
+              const rowObj: Record<string, any> = {};
+              (r.c || []).forEach((cell: any, cIdx: number) => {
+                const colName = cols[cIdx] || `col_${cIdx}`;
+                rowObj[colName] = cell && cell.v !== null && cell.v !== undefined ? cell.v : '';
+              });
+              const s = mapRowToService(rowObj, rIdx);
+              if (s) parsedServices.push(s);
+            });
+
+            if (parsedServices.length > 0) {
+              return applyMergedServices(parsedServices, 'spreadsheet');
+            }
+          }
+        }
+      } catch (gvizErr) {
+        // Continue to next gviz option or CSV fallback
+      }
+    }
+
+    // Attempt 2: Fetch through CSV Export
+    const csvUrlsToTry = [
+      `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`,
+      `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=0`
+    ];
+
+    for (const csvUrl of csvUrlsToTry) {
+      try {
+        const csvRes = await fetch(csvUrl);
+        if (csvRes.ok) {
+          const csvText = await csvRes.text();
+          const rows = parseCsvToObjects(csvText);
+          const parsedServices: Service[] = [];
+          rows.forEach((r, idx) => {
+            const s = mapRowToService(r, idx);
+            if (s) parsedServices.push(s);
+          });
+
+          if (parsedServices.length > 0) {
+            return applyMergedServices(parsedServices, 'spreadsheet');
+          }
+        }
+      } catch (csvErr: any) {
+        // Continue to next fallback
+      }
+    }
+
+    return {
+      success: false,
+      message: 'Found Google Sheet link, but could not read data. Please make sure the sheet is shared with: "Anyone with the link can view".'
+    };
+  }
+
+  // Check if Google Apps Script Web App URL
+  try {
+    const fetchUrl = url.includes('?') ? `${url}&action=getServices` : `${url}?action=getServices`;
+    const response = await fetch(fetchUrl, {
+      redirect: 'follow',
+      headers: { 'Accept': 'application/json' }
+    });
+
+    const data: any = await response.json();
+    let serviceList: Service[] = [];
+
+    if (Array.isArray(data)) {
+      serviceList = data;
+    } else if (data && data.status === 'success' && Array.isArray(data.data)) {
+      serviceList = data.data;
+    } else if (data && Array.isArray(data.services)) {
+      serviceList = data.services;
+    }
+
+    if (serviceList.length > 0) {
+      const sheetServiceIds = new Set(serviceList.map(s => s.service_id));
+      const existingRetained = db.services.filter(s => !sheetServiceIds.has(s.service_id));
+      db.services = [...serviceList, ...existingRetained];
+      db.settings.google_sheet_webapp_url = url;
+      db.settings.google_sheet_url = url;
+      db.settings.last_sheet_sync = new Date().toISOString();
+      saveDatabase(db);
+      return {
+        success: true,
+        message: `Successfully connected to Google Apps Script Web App! Loaded ${serviceList.length} services (Total catalog: ${db.services.length} services).`,
+        count: serviceList.length,
+        sourceType: 'webapp',
+        services: db.services
+      };
+    } else {
+      return {
+        success: true,
+        message: 'Connected to Web App, but no services were returned. Local database retained.',
+        sourceType: 'webapp'
+      };
+    }
+  } catch (err: any) {
+    console.error('Web App fetch error:', err);
+    return {
+      success: false,
+      message: `Failed to connect to Google Apps Script Web App: ${err.message || 'Check URL permissions (Deploy > Anyone).'}`
+    };
+  }
+}
+
+// Auto-sync on startup if a Google Sheet URL is configured
+if (db.settings.google_sheet_webapp_url || db.settings.google_sheet_url) {
+  const syncTarget = db.settings.google_sheet_webapp_url || db.settings.google_sheet_url || '';
+  if (syncTarget) {
+    syncFromGoogleSource(syncTarget)
+      .then(res => console.log('Initial Google Sheet sync result:', res.message))
+      .catch(err => console.warn('Initial Google Sheet sync skipped:', err.message));
+  }
 }
 
 // ================= API ROUTES =================
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', service: 'Balaji Communication API' });
+  res.json({
+    status: 'ok',
+    service: 'Balaji Communication Live API',
+    location: 'Gaini, Bareilly',
+    servicesCount: db.services.length,
+    enquiriesCount: db.enquiries.length,
+    lastSheetSync: db.settings.last_sheet_sync || null
+  });
 });
 
 // 1. Services
 app.get('/api/services', (req, res) => {
   const auth = req.headers.authorization;
   const isAdmin = auth && auth.includes(ADMIN_TOKEN);
-  
-  // Public users only see Active services
+
   const services = isAdmin 
     ? db.services 
     : db.services.filter(s => s.status === 'Active');
 
-  res.json({ success: true, services });
+  res.json({
+    success: true,
+    services,
+    last_sheet_sync: db.settings.last_sheet_sync || null
+  });
 });
 
 app.get('/api/services/:id', (req, res) => {
@@ -144,35 +389,58 @@ app.get('/api/services/:id', (req, res) => {
   res.json({ success: true, service });
 });
 
-app.post('/api/services', checkAdminAuth, (req, res) => {
+app.post('/api/services', checkAdminAuth, async (req, res) => {
   const body = req.body;
-  if (!body.service_name_en || !body.category) {
-    return res.status(400).json({ error: "Service name and category are required" });
+  const nameEn = (body.service_name_en || body.service_name_hi || '').trim();
+  const nameHi = (body.service_name_hi || body.service_name_en || '').trim();
+
+  if (!nameEn && !nameHi) {
+    return res.status(400).json({ error: "Service name is required (English or Hindi)." });
   }
 
   const newService: Service = {
     service_id: body.service_id || `srv-${Date.now().toString(36)}`,
-    service_name_en: body.service_name_en,
-    service_name_hi: body.service_name_hi || body.service_name_en,
-    category: body.category,
+    service_name_en: nameEn || nameHi,
+    service_name_hi: nameHi || nameEn,
+    category: (body.category || 'General Services').trim(),
     short_description_en: body.short_description_en || "",
     short_description_hi: body.short_description_hi || "",
     full_description_en: body.full_description_en || "",
     full_description_hi: body.full_description_hi || "",
     required_documents: Array.isArray(body.required_documents) 
       ? body.required_documents 
-      : (typeof body.required_documents === 'string' ? body.required_documents.split('\n').filter(Boolean) : []),
-    icon: body.icon || 'FileText',
-    status: body.status || 'Active',
+      : (typeof body.required_documents === 'string' ? body.required_documents.split('\n').map((s: string) => s.trim()).filter(Boolean) : []),
+    icon: body.icon || 'CreditCard',
+    status: body.status === 'Disabled' ? 'Disabled' : 'Active',
     popular: Boolean(body.popular),
-    estimated_time: body.estimated_time || 'Varies by authority',
-    whatsapp_message: body.whatsapp_message || `Hello Balaji Communication, I want information about ${body.service_name_en}.`,
-    created_at: new Date().toISOString(),
+    estimated_time: body.estimated_time || '1 to 3 Working Days',
+    whatsapp_message: body.whatsapp_message || `Hello Balaji Communication, I want information about ${nameEn}.`,
+    created_at: body.created_at || new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
 
-  db.services.unshift(newService);
+  const existingIdx = db.services.findIndex(s => s.service_id === newService.service_id);
+  if (existingIdx !== -1) {
+    db.services[existingIdx] = newService;
+  } else {
+    db.services.unshift(newService);
+  }
   saveDatabase(db);
+
+  // If a Google Apps Script Web App URL is configured, forward service asynchronously
+  if (db.settings.google_sheet_webapp_url && db.settings.google_sheet_webapp_url.includes('script.google.com')) {
+    try {
+      fetch(db.settings.google_sheet_webapp_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'createService',
+          token: ADMIN_TOKEN,
+          data: newService
+        })
+      }).catch(e => console.warn('Background sync to Google Sheet error:', e.message));
+    } catch (ignore) {}
+  }
 
   res.json({ success: true, service: newService });
 });
@@ -232,52 +500,73 @@ app.put('/api/settings', checkAdminAuth, (req, res) => {
   res.json({ success: true, settings: db.settings });
 });
 
-// 4. Enquiries
-app.post('/api/enquiries', (req, res) => {
-  const { customer_name, mobile, service_id, service_name, message, preferred_contact } = req.body;
+// 4. Direct Online Application & Enquiry Submission
+app.post(['/api/enquiries', '/api/applications'], (req, res) => {
+  const {
+    customer_name,
+    applicant_name,
+    mobile,
+    father_or_husband_name,
+    address,
+    service_id,
+    service_name,
+    category,
+    message,
+    preferred_contact,
+    urgency
+  } = req.body;
 
-  if (!customer_name || !mobile) {
-    return res.status(400).json({ error: "Customer name and mobile number are required." });
+  const finalName = (customer_name || applicant_name || '').trim();
+  if (!finalName || !mobile) {
+    return res.status(400).json({ error: "Applicant name and mobile number are required." });
   }
 
-  // Basic validation: 10-digit phone
   const cleanMobile = String(mobile).replace(/\D/g, '');
   if (cleanMobile.length < 10) {
     return res.status(400).json({ error: "Please enter a valid 10-digit mobile number." });
   }
 
-  // Security Check: forbid sensitive strings (Aadhaar number patterns, passwords, PINs)
-  const content = `${customer_name} ${message || ''}`.toLowerCase();
+  const content = `${finalName} ${message || ''}`.toLowerCase();
   if (content.includes('otp') || content.includes('password') || content.includes('upi pin') || content.includes('cvv')) {
     return res.status(400).json({ error: "Please do NOT enter OTP, bank passwords, or PINs on this form." });
   }
 
-  const newEnquiry: Enquiry = {
-    enquiry_id: `enq-${Date.now().toString(36)}`,
-    customer_name: customer_name.trim(),
+  const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+  const now = new Date();
+  const dateStr = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const refId = `BALAJI-APP-${dateStr}-${randomSuffix}`;
+
+  const newApplication: Enquiry = {
+    enquiry_id: refId,
+    customer_name: finalName,
     mobile: cleanMobile,
+    father_or_husband_name: father_or_husband_name ? father_or_husband_name.trim() : '',
+    address: address ? address.trim() : '',
     service_id: service_id || '',
-    service_name: service_name || 'General Inquiry',
+    service_name: service_name || 'General Citizen Service',
+    category: category || 'Jan Seva Kendra',
     message: message ? message.trim() : '',
     preferred_contact: preferred_contact === 'WhatsApp' ? 'WhatsApp' : 'Call',
     status: 'New',
-    created_at: new Date().toISOString()
+    urgency: urgency || 'Normal',
+    created_at: now.toISOString()
   };
 
-  db.enquiries.unshift(newEnquiry);
+  db.enquiries.unshift(newApplication);
   saveDatabase(db);
 
   // If Google Apps Script Web App URL is configured, asynchronously send to Google Sheets
-  if (db.settings.google_sheet_webapp_url) {
+  const sheetTarget = db.settings.google_sheet_webapp_url || db.settings.google_sheet_url;
+  if (sheetTarget && sheetTarget.includes('script.google.com')) {
     try {
-      fetch(db.settings.google_sheet_webapp_url, {
+      fetch(sheetTarget, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'createEnquiry',
-          data: newEnquiry
+          data: newApplication
         })
-      }).catch(err => console.error('Failed forwarding enquiry to Google Sheets:', err));
+      }).catch(err => console.error('Failed forwarding application to Google Sheets Web App:', err));
     } catch (err) {
       console.error('Error forwarding to Google Sheet:', err);
     }
@@ -285,8 +574,9 @@ app.post('/api/enquiries', (req, res) => {
 
   res.json({
     success: true,
-    message: "Thank you. Balaji Communication will contact you shortly.",
-    enquiry_id: newEnquiry.enquiry_id
+    message: "Thank you. Your direct application has been received by Balaji Communication Jan Seva Kendra.",
+    enquiry_id: newApplication.enquiry_id,
+    application: newApplication
   });
 });
 
@@ -294,11 +584,36 @@ app.get('/api/enquiries', checkAdminAuth, (req, res) => {
   res.json({ success: true, enquiries: db.enquiries });
 });
 
+// Citizen Live Tracking by Application ID or Mobile Number
+app.get('/api/applications/track/:query', (req, res) => {
+  const q = req.params.query.trim().toLowerCase();
+  const cleanQ = q.replace(/\D/g, '');
+
+  const matches = db.enquiries.filter(e => {
+    const idMatch = e.enquiry_id.toLowerCase().includes(q);
+    const mobMatch = cleanQ.length >= 6 && e.mobile.includes(cleanQ);
+    return idMatch || mobMatch;
+  });
+
+  res.json({
+    success: true,
+    query: req.params.query,
+    results: matches.map(m => ({
+      enquiry_id: m.enquiry_id,
+      customer_name: m.customer_name,
+      service_name: m.service_name,
+      status: m.status,
+      created_at: m.created_at,
+      preferred_contact: m.preferred_contact
+    }))
+  });
+});
+
 app.patch('/api/enquiries/:id/status', checkAdminAuth, (req, res) => {
   const { status } = req.body;
   const enquiry = db.enquiries.find(e => e.enquiry_id === req.params.id);
   if (!enquiry) {
-    return res.status(404).json({ error: "Enquiry not found" });
+    return res.status(404).json({ error: "Application/Enquiry not found" });
   }
 
   const validStatuses = ['New', 'Contacted', 'Processing', 'Completed', 'Cancelled'];
@@ -307,6 +622,7 @@ app.patch('/api/enquiries/:id/status', checkAdminAuth, (req, res) => {
   }
 
   enquiry.status = status;
+  enquiry.updated_at = new Date().toISOString();
   saveDatabase(db);
 
   res.json({ success: true, enquiry });
@@ -316,10 +632,10 @@ app.delete('/api/enquiries/:id', checkAdminAuth, (req, res) => {
   const prevLen = db.enquiries.length;
   db.enquiries = db.enquiries.filter(e => e.enquiry_id !== req.params.id);
   if (db.enquiries.length === prevLen) {
-    return res.status(404).json({ error: "Enquiry not found" });
+    return res.status(404).json({ error: "Application/Enquiry not found" });
   }
   saveDatabase(db);
-  res.json({ success: true, message: "Enquiry deleted" });
+  res.json({ success: true, message: "Deleted successfully" });
 });
 
 // 5. Authentication
@@ -371,41 +687,72 @@ app.post('/api/auth/change-password', checkAdminAuth, (req, res) => {
 
 // 6. Google Sheets Sync endpoint
 app.post('/api/sync-sheets', checkAdminAuth, async (req, res) => {
-  const { webapp_url } = req.body;
-  const targetUrl = webapp_url || db.settings.google_sheet_webapp_url;
+  const { webapp_url, url } = req.body;
+  const targetUrl = (webapp_url || url || db.settings.google_sheet_webapp_url || db.settings.google_sheet_url || '').trim();
 
   if (!targetUrl) {
-    return res.status(400).json({ error: "Google Apps Script Web App URL is not provided or configured." });
+    return res.status(400).json({ error: "Google Sheet URL or Web App link is required." });
   }
 
-  try {
-    // Test fetching from Google Apps Script Web App
-    const response = await fetch(`${targetUrl}?action=getServices`);
-    const data = await response.json();
-
-    if (data && data.status === 'success' && Array.isArray(data.data) && data.data.length > 0) {
-      // Merge or update local services
-      const sheetServices: Service[] = data.data;
-      db.services = sheetServices;
-      saveDatabase(db);
-      return res.json({
-        success: true,
-        message: `Successfully synced ${sheetServices.length} services from Google Sheets!`,
-        servicesCount: sheetServices.length
-      });
-    } else {
-      return res.json({
-        success: true,
-        message: "Connected to Google Sheet Web App, but no rows were returned or sheet is empty. Initial local database preserved.",
-        raw: data
-      });
-    }
-  } catch (err: any) {
-    console.error('Google Sheets sync error:', err);
-    return res.status(502).json({
-      error: `Could not connect to Google Apps Script Web App: ${err.message || 'Check URL and access permissions (Must be deployed to Anyone).'}`
+  const result = await syncFromGoogleSource(targetUrl);
+  if (result.success) {
+    return res.json({
+      success: true,
+      message: result.message,
+      servicesCount: result.count,
+      sourceType: result.sourceType
+    });
+  } else {
+    return res.status(400).json({
+      error: result.message
     });
   }
+});
+
+// 7. CSV Template / Services Export for Google Sheets
+app.get('/api/export-services-csv', (req, res) => {
+  const escapeCsv = (val: any) => `"${String(val || '').replace(/"/g, '""')}"`;
+  const headers = [
+    'service_id',
+    'service_name_en',
+    'service_name_hi',
+    'category',
+    'short_description_en',
+    'short_description_hi',
+    'full_description_en',
+    'full_description_hi',
+    'required_documents',
+    'icon',
+    'status',
+    'popular',
+    'estimated_time',
+    'whatsapp_message'
+  ];
+
+  const csvRows = [headers.join(',')];
+
+  db.services.forEach(s => {
+    csvRows.push([
+      escapeCsv(s.service_id),
+      escapeCsv(s.service_name_en),
+      escapeCsv(s.service_name_hi),
+      escapeCsv(s.category),
+      escapeCsv(s.short_description_en),
+      escapeCsv(s.short_description_hi),
+      escapeCsv(s.full_description_en),
+      escapeCsv(s.full_description_hi),
+      escapeCsv((s.required_documents || []).join('; ')),
+      escapeCsv(s.icon),
+      escapeCsv(s.status),
+      escapeCsv(s.popular ? 'yes' : 'no'),
+      escapeCsv(s.estimated_time),
+      escapeCsv(s.whatsapp_message)
+    ].join(','));
+  });
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="balaji_services.csv"');
+  res.send(csvRows.join('\n'));
 });
 
 // ================= VITE MIDDLEWARE / STATIC ASSETS =================
