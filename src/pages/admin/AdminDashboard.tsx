@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   Layers,
   Inbox,
@@ -34,7 +34,8 @@ import {
   CreditCard,
   Users,
   Heart,
-  Smartphone
+  Smartphone,
+  X
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { Service, Enquiry, SiteSettings, SheetTemplateInfo } from '../../types';
@@ -109,9 +110,10 @@ export const AdminDashboard: React.FC = () => {
   const [importStatusBanner, setImportStatusBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [templateFilterCategory, setTemplateFilterCategory] = useState<string>('all');
 
-  // Search & Filters for Enquiries
+  // Search & Filters for Enquiries & Citizen Details Modal
   const [enquiryFilterStatus, setEnquiryFilterStatus] = useState<string>('All');
   const [serviceSearchTerm, setServiceSearchTerm] = useState('');
+  const [selectedEnquiryForDetails, setSelectedEnquiryForDetails] = useState<Enquiry | null>(null);
 
   // Protect Admin route
   React.useEffect(() => {
@@ -370,15 +372,13 @@ export const AdminDashboard: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <a
-              href="/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+            <Link
+              to="/"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors border border-slate-200"
             >
-              <span>View Live Website</span>
               <ExternalLink className="w-3.5 h-3.5" />
-            </a>
+              <span>View Website</span>
+            </Link>
             <button
               type="button"
               id="btn-admin-logout"
@@ -687,12 +687,19 @@ export const AdminDashboard: React.FC = () => {
                       return (
                         <tr key={enq.enquiry_id} className="hover:bg-slate-50/80 transition-colors">
                           <td className="p-3.5">
-                            <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 block w-fit mb-1">
-                              {enq.enquiry_id}
-                            </span>
-                            <div className="font-bold text-slate-900 text-xs sm:text-sm">
-                              {enq.customer_name}
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedEnquiryForDetails(enq)}
+                              className="text-left group cursor-pointer"
+                              title="Click to view full citizen details and update status"
+                            >
+                              <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 block w-fit mb-1 group-hover:bg-blue-100 transition-colors">
+                                {enq.enquiry_id}
+                              </span>
+                              <div className="font-bold text-slate-900 text-xs sm:text-sm group-hover:text-blue-700 transition-colors">
+                                {enq.customer_name}
+                              </div>
+                            </button>
                             {enq.father_or_husband_name && (
                               <div className="text-[11px] text-slate-500">
                                 S/O, W/O: {enq.father_or_husband_name}
@@ -717,7 +724,7 @@ export const AdminDashboard: React.FC = () => {
                               </a>
                               {/* Quick WhatsApp */}
                               <a
-                                href={`https://wa.me/91${cleanMob}?text=${encodeURIComponent(`Hello ${enq.customer_name}, this is Balaji Communication regarding your application ${enq.enquiry_id} for ${enq.service_name}.`)}`}
+                                href={`https://wa.me/91${cleanMob}?text=${encodeURIComponent(`Hello ${enq.customer_name}, this is Balaji Communication regarding your application ${enq.enquiry_id} for ${enq.service_name}. Status: ${enq.status}.`)}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 title="WhatsApp Citizen"
@@ -751,37 +758,54 @@ export const AdminDashboard: React.FC = () => {
                           <td className="p-3.5">
                             <select
                               value={enq.status}
-                              onChange={(e) => updateEnquiryStatus(enq.enquiry_id, e.target.value as any)}
-                              className={`text-[11px] font-bold rounded-lg px-2 py-1 border ${
+                              onChange={async (e) => {
+                                const newStatus = e.target.value as any;
+                                await updateEnquiryStatus(enq.enquiry_id, newStatus);
+                                setServiceSuccessToast(`Status updated to "${newStatus}" for ${enq.customer_name || enq.applicant_name}`);
+                                setTimeout(() => setServiceSuccessToast(null), 3500);
+                              }}
+                              className={`text-[11px] font-bold rounded-lg px-2.5 py-1.5 border cursor-pointer transition-colors shadow-2xs ${
                                 enq.status === 'New'
-                                  ? 'bg-amber-50 text-amber-800 border-amber-300'
+                                  ? 'bg-blue-50 text-blue-800 border-blue-300 font-extrabold'
                                   : enq.status === 'Completed'
-                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold'
                                   : enq.status === 'Processing'
-                                  ? 'bg-blue-50 text-blue-800 border-blue-300'
-                                  : 'bg-slate-100 text-slate-700 border-slate-300'
+                                  ? 'bg-indigo-50 text-indigo-800 border-indigo-300 font-extrabold'
+                                  : enq.status === 'Contacted'
+                                  ? 'bg-amber-50 text-amber-800 border-amber-300 font-extrabold'
+                                  : 'bg-rose-50 text-rose-800 border-rose-300 font-extrabold'
                               }`}
                             >
-                              <option value="New">New</option>
-                              <option value="Contacted">Contacted</option>
-                              <option value="Processing">Processing</option>
-                              <option value="Completed">Completed</option>
-                              <option value="Cancelled">Cancelled</option>
+                              <option value="New">New (आवेदन प्राप्त)</option>
+                              <option value="Contacted">Contacted (दस्तावेज जांच)</option>
+                              <option value="Processing">Processing (प्रक्रियाधीन)</option>
+                              <option value="Completed">Completed (कार्य पूर्ण)</option>
+                              <option value="Cancelled">Cancelled (निरस्त)</option>
                             </select>
                           </td>
                           <td className="p-3.5 text-right">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (window.confirm(`Delete enquiry from ${enq.customer_name}?`)) {
-                                  deleteEnquiry(enq.enquiry_id);
-                                }
-                              }}
-                              className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
-                              title="Delete Enquiry"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedEnquiryForDetails(enq)}
+                                className="p-1.5 text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+                                title="View Full Details & Update Status"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (window.confirm(`Delete enquiry from ${enq.customer_name}?`)) {
+                                    deleteEnquiry(enq.enquiry_id);
+                                  }
+                                }}
+                                className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                                title="Delete Enquiry"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1797,6 +1821,185 @@ export const AdminDashboard: React.FC = () => {
                 className="px-5 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
               >
                 Close Preview
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* CITIZEN APPLICATION / ENQUIRY DETAILS & STATUS UPDATE MODAL */}
+      {selectedEnquiryForDetails && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 p-6 space-y-6 animate-in fade-in zoom-in-95 duration-150">
+            
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-mono text-xs font-extrabold text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                    {selectedEnquiryForDetails.enquiry_id}
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    Citizen Request
+                  </span>
+                </div>
+                <h3 className="text-xl font-extrabold text-slate-900">
+                  {selectedEnquiryForDetails.customer_name}
+                </h3>
+                {selectedEnquiryForDetails.father_or_husband_name && (
+                  <p className="text-xs text-slate-500">
+                    S/O, W/O: {selectedEnquiryForDetails.father_or_husband_name}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedEnquiryForDetails(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Quick Status Changer Box */}
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Update Application Status:
+                </span>
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                  selectedEnquiryForDetails.status === 'Completed'
+                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                    : selectedEnquiryForDetails.status === 'Processing'
+                    ? 'bg-indigo-100 text-indigo-800 border-indigo-300'
+                    : selectedEnquiryForDetails.status === 'Contacted'
+                    ? 'bg-amber-100 text-amber-800 border-amber-300'
+                    : selectedEnquiryForDetails.status === 'New'
+                    ? 'bg-blue-100 text-blue-800 border-blue-300'
+                    : 'bg-rose-100 text-rose-800 border-rose-300'
+                }`}>
+                  Current: {selectedEnquiryForDetails.status}
+                </span>
+              </div>
+
+              {/* 1-Click Status Buttons */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {[
+                  { key: 'New', label: 'New', sub: 'प्राप्त हुआ', bg: 'hover:bg-blue-50 hover:border-blue-300', active: 'bg-blue-600 text-white border-blue-600' },
+                  { key: 'Contacted', label: 'Contacted', sub: 'दस्तावेज जांच', bg: 'hover:bg-amber-50 hover:border-amber-300', active: 'bg-amber-600 text-white border-amber-600' },
+                  { key: 'Processing', label: 'Processing', sub: 'प्रक्रियाधीन', bg: 'hover:bg-indigo-50 hover:border-indigo-300', active: 'bg-indigo-600 text-white border-indigo-600' },
+                  { key: 'Completed', label: 'Completed', sub: 'कार्य पूर्ण', bg: 'hover:bg-emerald-50 hover:border-emerald-300', active: 'bg-emerald-600 text-white border-emerald-600' },
+                  { key: 'Cancelled', label: 'Cancelled', sub: 'निरस्त', bg: 'hover:bg-rose-50 hover:border-rose-300', active: 'bg-rose-600 text-white border-rose-600' }
+                ].map((st) => {
+                  const isCur = selectedEnquiryForDetails.status === st.key;
+                  return (
+                    <button
+                      key={st.key}
+                      type="button"
+                      onClick={async () => {
+                        const newStatus = st.key as any;
+                        await updateEnquiryStatus(selectedEnquiryForDetails.enquiry_id, newStatus);
+                        setSelectedEnquiryForDetails({ ...selectedEnquiryForDetails, status: newStatus });
+                        setServiceSuccessToast(`Status updated to "${newStatus}" for ${selectedEnquiryForDetails.customer_name}`);
+                        setTimeout(() => setServiceSuccessToast(null), 3000);
+                      }}
+                      className={`p-2 rounded-xl text-center border font-bold text-xs transition-all ${
+                        isCur ? st.active : `bg-white text-slate-700 border-slate-200 ${st.bg}`
+                      }`}
+                    >
+                      <div>{st.label}</div>
+                      <div className={`text-[10px] font-normal ${isCur ? 'text-white/90' : 'text-slate-400'}`}>
+                        {st.sub}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Information Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div className="p-3 bg-slate-50 rounded-xl space-y-1 border border-slate-100">
+                <span className="text-slate-400 block font-semibold text-[11px]">Requested Service:</span>
+                <span className="font-extrabold text-slate-900 text-sm block">
+                  {selectedEnquiryForDetails.service_name}
+                </span>
+                <span className="text-[10px] text-blue-700 font-bold block">
+                  Category: {selectedEnquiryForDetails.category || 'Jan Seva Kendra'}
+                </span>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-xl space-y-1 border border-slate-100">
+                <span className="text-slate-400 block font-semibold text-[11px]">Priority & Contact Preference:</span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded font-extrabold text-[10px] bg-blue-100 text-blue-800">
+                    {selectedEnquiryForDetails.urgency || 'Normal Priority'}
+                  </span>
+                  <span className="text-slate-600 font-bold">
+                    Prefers: {selectedEnquiryForDetails.preferred_contact}
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-500 pt-0.5">
+                  Applied: {selectedEnquiryForDetails.created_at ? new Date(selectedEnquiryForDetails.created_at).toLocaleString() : 'Recent'}
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-xl space-y-1 border border-slate-100 sm:col-span-2">
+                <span className="text-slate-400 block font-semibold text-[11px]">Citizen Mobile & Location:</span>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-mono text-sm font-extrabold text-slate-900">
+                    +91 {selectedEnquiryForDetails.mobile}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={`tel:${selectedEnquiryForDetails.mobile.replace(/\D/g, '')}`}
+                      className="inline-flex items-center gap-1 px-3 py-1 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-lg text-xs transition-colors shadow-xs"
+                    >
+                      <Phone className="w-3.5 h-3.5" />
+                      <span>Call Citizen</span>
+                    </a>
+                    <a
+                      href={`https://wa.me/91${selectedEnquiryForDetails.mobile.replace(/\D/g, '')}?text=${encodeURIComponent(`Namaste ${selectedEnquiryForDetails.customer_name}, this is Balaji Communication Jan Seva Kendra Gaini. Your application ${selectedEnquiryForDetails.enquiry_id} for ${selectedEnquiryForDetails.service_name} status is: ${selectedEnquiryForDetails.status}.`)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-colors shadow-xs"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5 fill-white" />
+                      <span>WhatsApp Citizen</span>
+                    </a>
+                  </div>
+                </div>
+                {selectedEnquiryForDetails.address && (
+                  <p className="text-xs text-slate-600 pt-1">
+                    📍 {selectedEnquiryForDetails.address} {selectedEnquiryForDetails.village ? `(${selectedEnquiryForDetails.village})` : ''}
+                  </p>
+                )}
+              </div>
+
+              {selectedEnquiryForDetails.message && (
+                <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-200/80 sm:col-span-2 space-y-1">
+                  <span className="text-amber-800 font-bold block text-[11px]">
+                    Citizen Note / Special Request:
+                  </span>
+                  <p className="text-xs text-slate-700 italic">
+                    "{selectedEnquiryForDetails.message}"
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Bottom Actions */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+              <span className="text-[11px] text-slate-500">
+                Changes are synchronized automatically with local storage and Google Sheets.
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedEnquiryForDetails(null)}
+                className="px-5 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+              >
+                Done
               </button>
             </div>
 

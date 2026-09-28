@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
-import { INITIAL_SERVICES, INITIAL_SETTINGS, CATEGORIES } from './src/data/initialData';
+import { INITIAL_SERVICES, INITIAL_SETTINGS, CATEGORIES, INITIAL_ENQUIRIES } from './src/data/initialData';
 import { Service, Enquiry, WebsiteSettings, PriceListItem, NoticeItem, QuickLinkItem, CitizenRecord } from './src/types';
 import { SHEET_TEMPLATES, generateCsvContent } from './src/data/sheetTemplates';
 
@@ -42,16 +42,20 @@ function loadDatabase(): DatabaseSchema {
       if (!parsed.settings.address_en || parsed.settings.address_en.includes('Sector 12')) {
         parsed.settings = { ...parsed.settings, ...INITIAL_SETTINGS };
       }
+      // Ensure enquiries are seeded if empty
+      if (!Array.isArray(parsed.enquiries) || parsed.enquiries.length === 0) {
+        parsed.enquiries = INITIAL_ENQUIRIES;
+      }
       return parsed;
     }
   } catch (err) {
     console.error('Error reading db.json, falling back to defaults:', err);
   }
 
-  // Initial seed (clean live application, no dummy test enquiries)
+  // Initial seed with services and initial enquiries
   const initialDb: DatabaseSchema = {
     services: INITIAL_SERVICES,
-    enquiries: [],
+    enquiries: INITIAL_ENQUIRIES,
     settings: INITIAL_SETTINGS,
     adminCredentials: {
       email: "admin@balaji.com",
@@ -539,14 +543,16 @@ app.post(['/api/enquiries', '/api/applications'], (req, res) => {
   const randomSuffix = Math.floor(1000 + Math.random() * 9000);
   const now = new Date();
   const dateStr = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const refId = `BALAJI-APP-${dateStr}-${randomSuffix}`;
+  const refId = (req.body.enquiry_id && String(req.body.enquiry_id).trim()) || `BALAJI-APP-${dateStr}-${randomSuffix}`;
 
   const newApplication: Enquiry = {
     enquiry_id: refId,
     customer_name: finalName,
+    applicant_name: (applicant_name || finalName).trim(),
     mobile: cleanMobile,
     father_or_husband_name: father_or_husband_name ? father_or_husband_name.trim() : '',
     address: address ? address.trim() : '',
+    village: (req.body.village || 'Gaini').trim(),
     service_id: service_id || '',
     service_name: service_name || 'General Citizen Service',
     category: category || 'Jan Seva Kendra',
@@ -554,10 +560,16 @@ app.post(['/api/enquiries', '/api/applications'], (req, res) => {
     preferred_contact: preferred_contact === 'WhatsApp' ? 'WhatsApp' : 'Call',
     status: 'New',
     urgency: urgency || 'Normal',
-    created_at: now.toISOString()
+    created_at: now.toISOString(),
+    updated_at: now.toISOString()
   };
 
-  db.enquiries.unshift(newApplication);
+  const existingIdx = db.enquiries.findIndex(e => e.enquiry_id === newApplication.enquiry_id);
+  if (existingIdx !== -1) {
+    db.enquiries[existingIdx] = newApplication;
+  } else {
+    db.enquiries.unshift(newApplication);
+  }
   saveDatabase(db);
 
   // If Google Apps Script Web App URL is configured, asynchronously send to Google Sheets
@@ -591,47 +603,129 @@ app.get('/api/enquiries', checkAdminAuth, (req, res) => {
 
 // Citizen Live Tracking by Application ID or Mobile Number
 app.get('/api/applications/track/:query', (req, res) => {
-  const q = req.params.query.trim().toLowerCase();
-  const cleanQ = q.replace(/\D/g, '');
+  const rawQ = req.params.query.trim();
+  const q = rawQ.toLowerCase();
+  const qNorm = q.replace(/[\s-_]/g, '');
+  const digitsOnly = q.replace(/\D/g, '');
+  const target10 = digitsOnly.length >= 10 ? digitsOnly.slice(-10) : digitsOnly;
 
   const matches = db.enquiries.filter(e => {
-    const idMatch = e.enquiry_id.toLowerCase().includes(q);
-    const mobMatch = cleanQ.length >= 6 && e.mobile.includes(cleanQ);
-    return idMatch || mobMatch;
+    // 1. Check ID with/without hyphens
+    const id = (e.enquiry_id || '').toLowerCase();
+    const idNorm = id.replace(/[\s-_]/g, '');
+    const idMatch = id.includes(q) || (qNorm.length >= 3 && idNorm.includes(qNorm));
+
+    // 2. Check 10-digit mobile number normalized
+    const eDigits = (e.mobile || '').replace(/\D/g, '');
+    const e10 = eDigits.length >= 10 ? eDigits.slice(-10) : eDigits;
+    const mobMatch = (target10.length === 10 && e10 === target10) || 
+                     (digitsOnly.length >= 5 && (eDigits.includes(digitsOnly) || digitsOnly.includes(eDigits)));
+
+    // 3. Check applicant name
+    const nameMatch = q.length >= 3 && (
+      (e.customer_name || '').toLowerCase().includes(q) || 
+      ((e as any).applicant_name || '').toLowerCase().includes(q)
+    );
+
+    return idMatch || mobMatch || nameMatch;
   });
 
   res.json({
     success: true,
-    query: req.params.query,
+    query: rawQ,
     results: matches.map(m => ({
       enquiry_id: m.enquiry_id,
       customer_name: m.customer_name,
+      applicant_name: m.applicant_name || m.customer_name,
       service_name: m.service_name,
       status: m.status,
       created_at: m.created_at,
-      preferred_contact: m.preferred_contact
+      updated_at: m.updated_at || m.created_at,
+      preferred_contact: m.preferred_contact,
+      village: m.village || 'Gaini',
+      address: m.address || '',
+      urgency: m.urgency || 'Normal',
+      masked_mobile: m.mobile ? (m.mobile.slice(0, 2) + '******' + m.mobile.slice(-2)) : ''
     }))
   });
 });
 
-app.patch('/api/enquiries/:id/status', checkAdminAuth, (req, res) => {
-  const { status } = req.body;
-  const enquiry = db.enquiries.find(e => e.enquiry_id === req.params.id);
-  if (!enquiry) {
-    return res.status(404).json({ error: "Application/Enquiry not found" });
-  }
+// Update Status (supports both PATCH and POST for maximum browser & proxy compatibility)
+const handleStatusUpdate = (req: express.Request, res: express.Response) => {
+  const { status, enquiry: clientEnquiry } = req.body;
+  const targetId = req.params.id;
 
   const validStatuses = ['New', 'Contacted', 'Processing', 'Completed', 'Cancelled'];
   if (!validStatuses.includes(status)) {
-    return res.status(400).json({ error: "Invalid status value" });
+    return res.status(400).json({ error: "Invalid status value. Must be New, Contacted, Processing, Completed, or Cancelled." });
   }
 
-  enquiry.status = status;
-  enquiry.updated_at = new Date().toISOString();
+  let enquiry = db.enquiries.find(e => 
+    e.enquiry_id === targetId || 
+    e.enquiry_id.toLowerCase() === targetId.toLowerCase()
+  );
+
+  if (!enquiry) {
+    // If client supplied the full enquiry or if it exists with normalized match
+    const normTarget = targetId.toLowerCase().replace(/[\s-_]/g, '');
+    enquiry = db.enquiries.find(e => (e.enquiry_id || '').toLowerCase().replace(/[\s-_]/g, '') === normTarget);
+  }
+
+  if (!enquiry) {
+    if (clientEnquiry && clientEnquiry.customer_name) {
+      // Upsert record from client
+      enquiry = {
+        ...clientEnquiry,
+        enquiry_id: targetId,
+        status,
+        updated_at: new Date().toISOString()
+      };
+      db.enquiries.unshift(enquiry);
+    } else {
+      // Create minimal placeholder record to preserve status
+      enquiry = {
+        enquiry_id: targetId,
+        customer_name: 'Citizen Applicant',
+        mobile: '',
+        service_name: 'Jan Seva Kendra Service',
+        message: '',
+        status,
+        preferred_contact: 'Call',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      db.enquiries.unshift(enquiry);
+    }
+  } else {
+    enquiry.status = status;
+    enquiry.updated_at = new Date().toISOString();
+  }
+
   saveDatabase(db);
 
-  res.json({ success: true, enquiry });
-});
+  // Forward status change to Google Sheets if configured
+  const sheetTarget = db.settings.google_sheet_webapp_url || db.settings.google_sheet_url;
+  if (sheetTarget && sheetTarget.includes('script.google.com')) {
+    try {
+      fetch(sheetTarget, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'updateEnquiryStatus',
+          enquiry_id: enquiry.enquiry_id,
+          status: enquiry.status
+        })
+      }).catch(err => console.error('Failed forwarding status update to Google Sheets Web App:', err));
+    } catch (err) {
+      console.error('Error forwarding status update to Google Sheet:', err);
+    }
+  }
+
+  return res.json({ success: true, enquiry, message: `Status updated to ${status}` });
+};
+
+app.patch('/api/enquiries/:id/status', checkAdminAuth, handleStatusUpdate);
+app.post('/api/enquiries/:id/status', checkAdminAuth, handleStatusUpdate);
 
 app.delete('/api/enquiries/:id', checkAdminAuth, (req, res) => {
   const prevLen = db.enquiries.length;
@@ -983,6 +1077,7 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
+    app.use('/vikki', express.static(distPath));
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));

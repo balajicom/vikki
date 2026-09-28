@@ -1,4 +1,4 @@
-import { Service, WebsiteSettings } from '../types';
+import { Service, WebsiteSettings, Enquiry } from '../types';
 
 export const INITIAL_SETTINGS: WebsiteSettings = {
   business_name_en: "Balaji Communication",
@@ -396,3 +396,96 @@ export const CATEGORIES = [
   "Certificates",
   "Other Digital Services"
 ];
+
+export const INITIAL_ENQUIRIES: Enquiry[] = [
+  {
+    enquiry_id: 'BALAJI-APP-2026-001',
+    customer_name: 'Dinesh Kumar Gangwar',
+    applicant_name: 'Dinesh Kumar Gangwar',
+    father_or_husband_name: 'Shri Ram Prasad Gangwar',
+    mobile: '9870677605',
+    service_name: 'Aadhaar Mobile Number Update',
+    service_id: 'srv-aadhaar-mob',
+    category: 'Aadhaar',
+    village: 'Gaini',
+    address: 'Near Inter College Road, Gaini, Bareilly',
+    message: 'Urgent mobile linking for bank OTP and PM Kisan e-KYC',
+    preferred_contact: 'WhatsApp',
+    urgency: 'Urgent',
+    status: 'Processing',
+    created_at: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 6 * 3600 * 1000).toISOString()
+  },
+  {
+    enquiry_id: 'BALAJI-APP-2026-002',
+    customer_name: 'Sunita Devi',
+    applicant_name: 'Sunita Devi',
+    father_or_husband_name: 'W/o Manoj Kumar',
+    mobile: '9876543210',
+    service_name: 'Income Certificate (आय प्रमाण पत्र)',
+    service_id: 'srv-income-cert',
+    category: 'Government Certificates',
+    village: 'Gaini',
+    address: 'Masjid Wali Gali, Gaini, Bareilly',
+    message: 'Required for daughter UP scholarship application form',
+    preferred_contact: 'Call',
+    urgency: 'Normal',
+    status: 'Completed',
+    created_at: new Date(Date.now() - 48 * 3600 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 12 * 3600 * 1000).toISOString()
+  },
+  {
+    enquiry_id: 'BALAJI-APP-2026-003',
+    customer_name: 'Rameshwar Dayal Gangwar',
+    applicant_name: 'Rameshwar Dayal Gangwar',
+    father_or_husband_name: 'Late Hetram Gangwar',
+    mobile: '9870123456',
+    service_name: 'PM Kisan Samman Nidhi e-KYC & Land Record Seeding',
+    service_id: 'srv-pmkisan-ekyc',
+    category: 'PM Kisan',
+    village: 'Gaini',
+    address: 'Main Market Road, Gaini',
+    message: 'Installment stopped due to biometric e-KYC pending',
+    preferred_contact: 'Call',
+    urgency: 'Urgent',
+    status: 'Contacted',
+    created_at: new Date(Date.now() - 18 * 3600 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 4 * 3600 * 1000).toISOString()
+  },
+  {
+    enquiry_id: 'BALAJI-APP-2026-004',
+    customer_name: 'Pooja Verma',
+    applicant_name: 'Pooja Verma',
+    father_or_husband_name: 'Shri Suresh Verma',
+    mobile: '9412345678',
+    service_name: 'New PAN Card Application (Form 49A)',
+    service_id: 'srv-pan-new',
+    category: 'PAN Card',
+    village: 'Gaini',
+    address: 'Inter College Road, Gaini, Bareilly',
+    message: 'Need physical PAN card urgently for college admission',
+    preferred_contact: 'WhatsApp',
+    urgency: 'Normal',
+    status: 'New',
+    created_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString()
+  },
+  {
+    enquiry_id: 'BALAJI-APP-2026-005',
+    customer_name: 'Mohammad Arif',
+    applicant_name: 'Mohammad Arif',
+    father_or_husband_name: 'Shri Abdul Gaffar',
+    mobile: '9837654321',
+    service_name: 'Ayushman Bharat Golden Card (PM-JAY 5 Lakh Treatment)',
+    service_id: 'srv-ayushman-card',
+    category: 'Ayushman',
+    village: 'Gaini',
+    address: 'Masjid Bali Gali, Gaini, Bareilly',
+    message: 'Family name listed in SECC list, need PVC Ayushman card print',
+    preferred_contact: 'WhatsApp',
+    urgency: 'Normal',
+    status: 'Completed',
+    created_at: new Date(Date.now() - 72 * 3600 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 20 * 3600 * 1000).toISOString()
+  }
+];
+

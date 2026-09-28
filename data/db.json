@@ -1,27 +1,6 @@
 {
   "services": [
     {
-      "service_id": "srv-muj5e5dp",
-      "service_name_en": "xxxxx",
-      "service_name_hi": "yyyyyyyyyyyyyyyyyyyyyyyyyy",
-      "category": "All",
-      "short_description_en": "zzzzzzzzzzzzzzzz",
-      "short_description_hi": "aaaaaaaaaaaaaaaaaa",
-      "full_description_en": "bbbbbbbbbbbbbbbbbbbbbbbbbbb",
-      "full_description_hi": "ccccccccccccc",
-      "required_documents": [
-        "Original Aadhaar Card",
-        "Registered Mobile Number"
-      ],
-      "icon": "CreditCard",
-      "status": "Active",
-      "popular": true,
-      "estimated_time": "1 to 3 Working Days",
-      "whatsapp_message": "Hello Balaji Communication, I want information about xxxxx.",
-      "created_at": "2026-09-27T01:37:12.684Z",
-      "updated_at": "2026-09-27T01:37:13.021Z"
-    },
-    {
       "service_id": "srv-muj4xqyz",
       "service_name_en": "PM Kisan Samman Nidhi E-KYC",
       "service_name_hi": "पीएम किसान सम्मान निधि ई-केवाईसी",
@@ -402,20 +381,111 @@
   ],
   "enquiries": [
     {
-      "enquiry_id": "BALAJI-APP-2609-8367",
-      "customer_name": "nmmmmmmm",
-      "mobile": "8006494238",
-      "father_or_husband_name": "sdffffffff",
-      "address": "fssssssssdddddddddddddddddddddddddd",
-      "service_id": "srv-aadhaar-mob",
-      "service_name": "आधार मोबाइल नंबर अपडेट / जोड़ना",
-      "category": "Aadhaar",
-      "message": "",
+      "enquiry_id": "BALAJI-APP-2609-4397",
+      "customer_name": "Vikram Singh",
+      "applicant_name": "Vikram Singh",
+      "mobile": "9870677605",
+      "father_or_husband_name": "",
+      "address": "",
+      "village": "Gaini",
+      "service_id": "",
+      "service_name": "Ration Card e-KYC",
+      "category": "Ration Card",
+      "message": "Need to link all family member Aadhaar",
       "preferred_contact": "WhatsApp",
-      "status": "Completed",
+      "status": "Processing",
       "urgency": "Urgent",
-      "created_at": "2026-09-27T01:45:39.085Z",
-      "updated_at": "2026-09-27T02:08:08.179Z"
+      "created_at": "2026-09-28T04:53:23.585Z",
+      "updated_at": "2026-09-28T04:53:33.653Z"
+    },
+    {
+      "enquiry_id": "BALAJI-APP-2026-001",
+      "customer_name": "Dinesh Kumar Gangwar",
+      "applicant_name": "Dinesh Kumar Gangwar",
+      "father_or_husband_name": "Shri Ram Prasad Gangwar",
+      "mobile": "9870677605",
+      "service_name": "Aadhaar Mobile Number Update",
+      "service_id": "srv-aadhaar-mob",
+      "category": "Aadhaar",
+      "village": "Gaini",
+      "address": "Near Inter College Road, Gaini, Bareilly",
+      "message": "Urgent mobile linking for bank OTP and PM Kisan e-KYC",
+      "preferred_contact": "WhatsApp",
+      "urgency": "Urgent",
+      "status": "Completed",
+      "created_at": "2026-09-27T04:49:33.095Z",
+      "updated_at": "2026-09-28T04:49:55.428Z"
+    },
+    {
+      "enquiry_id": "BALAJI-APP-2026-002",
+      "customer_name": "Sunita Devi",
+      "applicant_name": "Sunita Devi",
+      "father_or_husband_name": "W/o Manoj Kumar",
+      "mobile": "9876543210",
+      "service_name": "Income Certificate (आय प्रमाण पत्र)",
+      "service_id": "srv-income-cert",
+      "category": "Government Certificates",
+      "village": "Gaini",
+      "address": "Masjid Wali Gali, Gaini, Bareilly",
+      "message": "Required for daughter UP scholarship application form",
+      "preferred_contact": "Call",
+      "urgency": "Normal",
+      "status": "Completed",
+      "created_at": "2026-09-26T04:49:33.095Z",
+      "updated_at": "2026-09-27T16:49:33.095Z"
+    },
+    {
+      "enquiry_id": "BALAJI-APP-2026-003",
+      "customer_name": "Rameshwar Dayal Gangwar",
+      "applicant_name": "Rameshwar Dayal Gangwar",
+      "father_or_husband_name": "Late Hetram Gangwar",
+      "mobile": "9870123456",
+      "service_name": "PM Kisan Samman Nidhi e-KYC & Land Record Seeding",
+      "service_id": "srv-pmkisan-ekyc",
+      "category": "PM Kisan",
+      "village": "Gaini",
+      "address": "Main Market Road, Gaini",
+      "message": "Installment stopped due to biometric e-KYC pending",
+      "preferred_contact": "Call",
+      "urgency": "Urgent",
+      "status": "Contacted",
+      "created_at": "2026-09-27T10:49:33.095Z",
+      "updated_at": "2026-09-28T00:49:33.095Z"
+    },
+    {
+      "enquiry_id": "BALAJI-APP-2026-004",
+      "customer_name": "Pooja Verma",
+      "applicant_name": "Pooja Verma",
+      "father_or_husband_name": "Shri Suresh Verma",
+      "mobile": "9412345678",
+      "service_name": "New PAN Card Application (Form 49A)",
+      "service_id": "srv-pan-new",
+      "category": "PAN Card",
+      "village": "Gaini",
+      "address": "Inter College Road, Gaini, Bareilly",
+      "message": "Need physical PAN card urgently for college admission",
+      "preferred_contact": "WhatsApp",
+      "urgency": "Normal",
+      "status": "New",
+      "created_at": "2026-09-28T02:49:33.095Z"
+    },
+    {
+      "enquiry_id": "BALAJI-APP-2026-005",
+      "customer_name": "Mohammad Arif",
+      "applicant_name": "Mohammad Arif",
+      "father_or_husband_name": "Shri Abdul Gaffar",
+      "mobile": "9837654321",
+      "service_name": "Ayushman Bharat Golden Card (PM-JAY 5 Lakh Treatment)",
+      "service_id": "srv-ayushman-card",
+      "category": "Ayushman",
+      "village": "Gaini",
+      "address": "Masjid Bali Gali, Gaini, Bareilly",
+      "message": "Family name listed in SECC list, need PVC Ayushman card print",
+      "preferred_contact": "WhatsApp",
+      "urgency": "Normal",
+      "status": "Completed",
+      "created_at": "2026-09-25T04:49:33.095Z",
+      "updated_at": "2026-09-27T08:49:33.095Z"
     }
   ],
   "settings": {
@@ -446,5 +516,20 @@
   "adminCredentials": {
     "email": "admin@balaji.com",
     "passwordHash": "balaji@2026"
-  }
+  },
+  "notices": [
+    {
+      "notice_id": "NTC-999",
+      "title_en": "Ration Card eKYC",
+      "title_hi": "राशन कार्ड ई-केवाईसी",
+      "description_en": "",
+      "description_hi": "",
+      "category": "Ration",
+      "badge_type": "Urgent",
+      "last_date": "",
+      "action_link": "",
+      "status": "Active",
+      "created_at": "2026-09-27T02:01:22.620Z"
+    }
+  ]
 }

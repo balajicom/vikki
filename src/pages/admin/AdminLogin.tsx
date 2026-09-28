@@ -51,7 +51,17 @@ export const AdminLogin: React.FC = () => {
           </p>
         </div>
 
-       
+        {/* Demo Credentials Helper Box */}
+        <div className="p-3.5 bg-blue-50 border border-blue-200/80 rounded-xl text-xs text-blue-900 space-y-1">
+          <div className="font-bold flex items-center gap-1.5 text-blue-950">
+            <CheckCircle className="w-4 h-4 text-blue-600" />
+            <span>Default Administrator Credentials:</span>
+          </div>
+          <div className="pl-5 space-y-0.5 text-slate-700 font-mono text-[11px]">
+            <div>Email: <strong>admin@balaji.com</strong></div>
+            <div>Password: <strong>balaji@2026</strong></div>
+          </div>
+        </div>
 
         {error && (
           <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-xs text-rose-800">

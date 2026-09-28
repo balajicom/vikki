@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="hi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Balaji Communication | Jan Seva Kendra</title>
+    <script>
+      // Single Page Application (SPA) redirect for GitHub Pages
+      // Redirects non-hash routes like /vikki/services to /vikki/#/services
+      (function() {
+        var path = window.location.pathname;
+        var repoName = '/vikki';
+        
+        // Remove repoName from start of path if present
+        if (path.indexOf(repoName) === 0) {
+          path = path.slice(repoName.length);
+        }
+        
+        // Normalize path
+        if (!path || !path.startsWith('/')) {
+          path = '/' + (path || '');
+        }
+
+        var search = window.location.search || '';
+        var hash = window.location.hash || '';
+
+        // Target URL with hash
+        var targetUrl = window.location.origin + repoName + '/#' + path + search + hash;
+        window.location.replace(targetUrl);
+      })();
+    </script>
+  </head>
+  <body style="font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background-color: #f8fafc; color: #0f172a; text-align: center; padding: 20px;">
+    <div style="background: white; padding: 32px; border-radius: 16px; border: 1px solid #e2e8f0; max-width: 480px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+      <h2 style="margin-top: 0; color: #1e40af;">Balaji Communication</h2>
+      <p style="font-size: 14px; color: #475569;">Redirecting to Jan Seva Kendra Portal...</p>
+      <p style="font-size: 12px; color: #94a3b8;">यदि आप स्वचालित रूप से रीडायरेक्ट नहीं होते हैं, तो नीचे क्लिक करें:</p>
+      <a href="/vikki/#/" style="display: inline-block; margin-top: 12px; padding: 10px 20px; background-color: #1d4ed8; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px;">
+        Go to Home (मुख्य पृष्ठ)
+      </a>
+    </div>
+  </body>
+</html>
