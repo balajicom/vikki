@@ -198,6 +198,28 @@ async function syncFromGoogleSource(inputUrl: string): Promise<{
     return { success: false, message: 'Google Sheets or Web App URL is required.' };
   }
 
+  // Pre-validate common user URL misconfigurations
+  if (url.includes('script.google.com') && (url.includes('/edit') || url.includes('/home/projects/'))) {
+    return {
+      success: false,
+      message: 'You entered an Apps Script Project Editor link (.../edit) instead of the deployed Web App link. In Google Sheets, click Extensions > Apps Script > Deploy > New deployment (or Manage deployments) > Select Web app > Make sure "Who has access" is set to "Anyone" > Copy the Web App URL ending in /exec.'
+    };
+  }
+
+  if (url.includes('script.google.com') && url.endsWith('/dev')) {
+    return {
+      success: false,
+      message: 'You entered a /dev test deployment link which requires private Google login. Please click Deploy > New deployment > Web app > Set "Who has access: Anyone" > Copy the public /exec URL.'
+    };
+  }
+
+  if (url.includes('drive.google.com/drive/folders')) {
+    return {
+      success: false,
+      message: 'You entered a Google Drive folder link. Please paste your Google Spreadsheet link or Google Apps Script Web App URL.'
+    };
+  }
+
   // Check if standard Google Spreadsheet Link
   const sheetMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/i);
 
@@ -236,6 +258,11 @@ async function syncFromGoogleSource(inputUrl: string): Promise<{
         const gvizRes = await fetch(gvizUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
         if (!gvizRes.ok) continue;
         const gvizText = await gvizRes.text();
+
+        // Check if redirected to Google Login HTML (private spreadsheet)
+        if (gvizText.trim().startsWith('<') || gvizText.toLowerCase().includes('<html')) {
+          continue;
+        }
 
         const jsonStart = gvizText.indexOf('{');
         const jsonEnd = gvizText.lastIndexOf('}');
@@ -279,6 +306,10 @@ async function syncFromGoogleSource(inputUrl: string): Promise<{
         const csvRes = await fetch(csvUrl);
         if (csvRes.ok) {
           const csvText = await csvRes.text();
+          // If response starts with HTML, it means Google returned a login redirect
+          if (csvText.trim().startsWith('<') || csvText.toLowerCase().includes('<html')) {
+            continue;
+          }
           const rows = parseCsvToObjects(csvText);
           const parsedServices: Service[] = [];
           rows.forEach((r, idx) => {
@@ -297,25 +328,85 @@ async function syncFromGoogleSource(inputUrl: string): Promise<{
 
     return {
       success: false,
-      message: 'Found Google Sheet link, but could not read data. Please make sure the sheet is shared with: "Anyone with the link can view".'
+      message: 'Google Sheet link found, but Google returned private login or could not read data. Solution: Open your Google Sheet, click the green "Share" button at top-right, change "General access" to "Anyone with the link can view", and try again.'
     };
   }
 
   // Check if Google Apps Script Web App URL
   try {
-    const fetchUrl = url.includes('?') ? `${url}&action=getServices` : `${url}?action=getServices`;
-    const response = await fetch(fetchUrl, {
+    // Try getAllData first, which retrieves services, enquiries, settings, etc.
+    const primaryFetchUrl = url.includes('?') ? `${url}&action=getAllData` : `${url}?action=getAllData`;
+    let response = await fetch(primaryFetchUrl, {
       redirect: 'follow',
       headers: { 'Accept': 'application/json' }
     });
 
-    const data: any = await response.json();
+    let rawText = await response.text();
+
+    // Check if Google returned an HTML page (common when permissions are wrong or redirected to login)
+    if (rawText.trim().startsWith('<') || rawText.toLowerCase().includes('<html') || response.url.includes('accounts.google.com')) {
+      if (rawText.includes('ServiceLogin') || rawText.includes('accounts.google.com') || response.url.includes('accounts.google.com') || rawText.includes('Sign in')) {
+        return {
+          success: false,
+          message: 'Google Apps Script requires Google Account Sign-In because "Who has access" is set to "Only myself". Solution: In Apps Script, click "Deploy" > "Manage deployments" > click the pencil (Edit) icon > change "Who has access" to "Anyone" > click "Deploy", then try syncing again.'
+        };
+      }
+      if (rawText.includes('Script error') || rawText.includes('Exception') || rawText.includes('Script function not found')) {
+        return {
+          success: false,
+          message: 'Google Apps Script encountered an execution error. Please open Google Sheets > Extensions > Apps Script, select "setupAllTemplateSheets" from the toolbar function dropdown, and click "Run" to initialize tabs and authorize permissions.'
+        };
+      }
+      return {
+        success: false,
+        message: 'Google returned an HTML web page instead of JSON data. Please verify your Google Apps Script deployment settings: Execute as: "Me", Who has access: "Anyone", and URL ends with "/exec".'
+      };
+    }
+
+    // Attempt to parse JSON safely
+    let data: any;
+    try {
+      data = JSON.parse(rawText);
+    } catch (parseErr: any) {
+      // If primary query failed JSON parse, try fallback to ?action=getServices
+      const fallbackUrl = url.includes('?') ? `${url}&action=getServices` : `${url}?action=getServices`;
+      try {
+        const fallbackRes = await fetch(fallbackUrl, {
+          redirect: 'follow',
+          headers: { 'Accept': 'application/json' }
+        });
+        const fallbackText = await fallbackRes.text();
+        if (fallbackText.trim().startsWith('<')) {
+          return {
+            success: false,
+            message: 'Google Apps Script returned an HTML page instead of JSON. Please check Deploy > Manage deployments > Who has access: Anyone.'
+          };
+        }
+        data = JSON.parse(fallbackText);
+      } catch (e) {
+        return {
+          success: false,
+          message: `Google Apps Script returned invalid data: ${rawText.slice(0, 100)}...`
+        };
+      }
+    }
+
     let serviceList: Service[] = [];
 
     if (Array.isArray(data)) {
       serviceList = data;
-    } else if (data && data.status === 'success' && Array.isArray(data.data)) {
-      serviceList = data.data;
+    } else if (data && data.status === 'success' && data.data) {
+      if (Array.isArray(data.data)) {
+        serviceList = data.data;
+      } else if (data.data.services && Array.isArray(data.data.services)) {
+        serviceList = data.data.services;
+        // Also sync enquiries if provided
+        if (Array.isArray(data.data.enquiries) && data.data.enquiries.length > 0) {
+          const remoteEnqIds = new Set(data.data.enquiries.map((e: any) => e.enquiry_id));
+          const localRetained = db.enquiries.filter(e => !remoteEnqIds.has(e.enquiry_id));
+          db.enquiries = [...data.data.enquiries, ...localRetained];
+        }
+      }
     } else if (data && Array.isArray(data.services)) {
       serviceList = data.services;
     }
@@ -336,9 +427,13 @@ async function syncFromGoogleSource(inputUrl: string): Promise<{
         services: db.services
       };
     } else {
+      db.settings.google_sheet_webapp_url = url;
+      db.settings.google_sheet_url = url;
+      db.settings.last_sheet_sync = new Date().toISOString();
+      saveDatabase(db);
       return {
         success: true,
-        message: 'Connected to Web App, but no services were returned. Local database retained.',
+        message: 'Successfully connected to Google Apps Script Web App! Database link verified (no service rows found in sheet, local catalog preserved).',
         sourceType: 'webapp'
       };
     }

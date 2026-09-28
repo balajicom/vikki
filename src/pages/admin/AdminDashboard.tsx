@@ -1141,13 +1141,87 @@ export const AdminDashboard: React.FC = () => {
                 </button>
               </div>
 
+              {/* Real-time URL format validation & warnings */}
+              {sheetsUrlInput.trim().length > 0 && (
+                <div className="space-y-2">
+                  {sheetsUrlInput.includes('/edit') && (
+                    <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs flex items-start gap-2.5 shadow-2xs">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <strong className="font-bold text-amber-950 block">⚠️ Apps Script Editor link (.../edit) detected:</strong>
+                        <p className="text-[11px] leading-relaxed">
+                          This is an Apps Script editor URL, which cannot be queried by web apps.
+                        </p>
+                        <p className="text-[11px] font-semibold text-amber-950 bg-amber-100/70 p-2 rounded-lg border border-amber-200">
+                          <strong>How to get the right link:</strong> In your Google Sheet, go to <strong>Extensions &gt; Apps Script</strong> &gt; click <strong>Deploy &gt; Manage deployments</strong> &gt; copy the <strong>Web App URL (ends with /exec)</strong>. Ensure "Who has access" is set to <strong>"Anyone"</strong>.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {sheetsUrlInput.includes('/dev') && (
+                    <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs flex items-start gap-2.5 shadow-2xs">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <strong className="font-bold text-amber-950 block">⚠️ Test Deployment (/dev) link detected:</strong>
+                        <p className="text-[11px] leading-relaxed">
+                          The <code>/dev</code> test link requires Google login and cannot be synced publicly.
+                        </p>
+                        <p className="text-[11px] font-semibold text-amber-950 bg-amber-100/70 p-2 rounded-lg border border-amber-200">
+                          <strong>Fix:</strong> Click <strong>Deploy &gt; New deployment &gt; Web app</strong> &gt; Set <strong>Who has access: Anyone</strong> &gt; Copy the <strong>/exec</strong> link.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {sheetsUrlInput.includes('script.google.com') && sheetsUrlInput.includes('/exec') && (
+                    <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-900 text-xs flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span><strong>Valid Web App URL format (/exec):</strong> Ready to connect and sync with Google Apps Script backend.</span>
+                    </div>
+                  )}
+
+                  {sheetsUrlInput.includes('docs.google.com/spreadsheets') && !sheetsUrlInput.includes('/edit') && (
+                    <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-900 text-xs flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span><strong>Valid Google Sheet link:</strong> Make sure the sheet is shared with "Anyone with the link can view".</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Troubleshooting Quick Help Banner */}
+              <div className="p-3.5 bg-blue-50/80 border border-blue-200 rounded-xl text-xs space-y-1.5">
+                <div className="flex items-center gap-2 font-bold text-blue-950 text-xs">
+                  <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>Important Setup Requirement to Avoid "Not Valid JSON" Error:</span>
+                </div>
+                <p className="text-[11px] text-slate-600 leading-relaxed">
+                  When you deploy Google Apps Script (<strong>Deploy &gt; New deployment &gt; Web app</strong>), you <strong>MUST</strong> select <strong className="text-blue-900 underline">Who has access: Anyone</strong>. If it is left on "Only myself", Google redirects the request to a sign-in web page (HTML) instead of returning data, which triggers the error.
+                </p>
+              </div>
+
               {syncStatusMsg && (
-                <div className={`p-3 rounded-lg text-xs font-semibold border ${
+                <div className={`p-4 rounded-xl text-xs font-semibold border space-y-1.5 ${
                   syncStatusMsg.toLowerCase().includes('success') || syncStatusMsg.toLowerCase().includes('imported') || syncStatusMsg.toLowerCase().includes('loaded')
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                    : 'bg-amber-50 border-amber-200 text-amber-800'
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
+                    : 'bg-rose-50 border-rose-300 text-rose-900'
                 }`}>
-                  {syncStatusMsg}
+                  <div className="flex items-start gap-2.5">
+                    {syncStatusMsg.toLowerCase().includes('success') || syncStatusMsg.toLowerCase().includes('imported') || syncStatusMsg.toLowerCase().includes('loaded') ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    )}
+                    <div className="space-y-1">
+                      <p className="font-bold">{syncStatusMsg}</p>
+                      {!syncStatusMsg.toLowerCase().includes('success') && !syncStatusMsg.toLowerCase().includes('imported') && (
+                        <p className="text-[11px] text-slate-600 font-normal mt-1 leading-relaxed">
+                          Need help? Check the step-by-step master guide below, or use <strong>Download CSV</strong> to edit and <strong>Import .CSV</strong> directly without needing Apps Script.
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -1378,7 +1452,7 @@ export const AdminDashboard: React.FC = () => {
                   <div className="w-6 h-6 rounded-full bg-amber-600 text-white font-bold text-xs flex items-center justify-center">3</div>
                   <h4 className="font-bold text-white text-sm">Deploy Web App & Paste URL</h4>
                   <p className="text-slate-400 text-[11px] leading-relaxed">
-                    Click <strong>Deploy &gt; New deployment &gt; Web app</strong>. Set <strong>Who has access: Anyone</strong>. Copy the resulting URL and paste it in the sync box above!
+                    Click <strong>Deploy &gt; New deployment &gt; Web app</strong>. Set <strong>Who has access: Anyone</strong> (DO NOT select "Only myself"!). Copy the resulting URL ending in <strong>/exec</strong> and paste it in the sync box above!
                   </p>
                 </div>
               </div>

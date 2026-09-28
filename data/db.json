@@ -1,6 +1,87 @@
 {
   "services": [
     {
+      "service_id": "srv-aadhaar-mob",
+      "service_name_en": "Aadhaar Mobile Number Update",
+      "service_name_hi": "आधार मोबाइल नंबर अपडेट / जोड़ना",
+      "category": "Aadhaar",
+      "short_description_en": "Quick assistance for linking or updating active mobile number in Aadhaar.",
+      "short_description_hi": "अपने आधार कार्ड में चालू मोबाइल नंबर लिंक या अपडेट करवाने के लिए सहायता।",
+      "full_description_en": "Updating mobile number in Aadhaar is essential for OTPs, banking, and government schemes.",
+      "full_description_hi": "आधार में मोबाइल नंबर लिंक होना बैंक और सरकारी योजनाओं के लिए आवश्यक है।",
+      "required_documents": [
+        "Original Aadhaar Card",
+        "Active Mobile Number"
+      ],
+      "icon": "Smartphone",
+      "status": "Active",
+      "popular": true,
+      "estimated_time": "24-48 Hours",
+      "whatsapp_message": "Hello Balaji Communication, I need help with Aadhaar Mobile Number Update."
+    },
+    {
+      "service_id": "srv-pan-new",
+      "service_name_en": "New PAN Card (Instant e-PAN & Physical)",
+      "service_name_hi": "नया पैन कार्ड (त्वरित ई-पैन और फिजिकल कार्ड)",
+      "category": "PAN Card",
+      "short_description_en": "Apply for fresh NSDL / UTI PAN card using Aadhaar e-KYC.",
+      "short_description_hi": "आधार ई-केवाईसी द्वारा नया पैन कार्ड मात्र कुछ दिनों में प्राप्त करें।",
+      "full_description_en": "Complete online application for individual, minor, or business PAN card with paperless verification.",
+      "full_description_hi": "नागरिकों और व्यापारियों के लिए संपूर्ण ऑनलाइन पैन कार्ड आवेदन सुविधा।",
+      "required_documents": [
+        "Aadhaar Card",
+        "2 Passport Photos",
+        "Signature"
+      ],
+      "icon": "CreditCard",
+      "status": "Active",
+      "popular": true,
+      "estimated_time": "3-5 Working Days",
+      "whatsapp_message": "Hello Balaji Communication, I want to apply for a New PAN Card."
+    },
+    {
+      "service_id": "srv-income-cert",
+      "service_name_en": "Income Certificate (आय प्रमाण पत्र)",
+      "service_name_hi": "आय प्रमाण पत्र (Income Certificate UP)",
+      "category": "Government Certificates",
+      "short_description_en": "Online application on UP eDistrict portal for official revenue income certificate.",
+      "short_description_hi": "उत्तर प्रदेश ई-डिस्ट्रिक्ट पोर्टल के माध्यम से आधिकारिक आय प्रमाण पत्र।",
+      "full_description_en": "Required for student scholarships, government welfare schemes, and pension applications.",
+      "full_description_hi": "छात्रवृत्ति, सरकारी योजनाओं और राशन कार्ड के लिए अनिवार्य राजस्व आय प्रमाण पत्र।",
+      "required_documents": [
+        "Aadhaar Card",
+        "Ration Card / Family Register",
+        "Self Declaration",
+        "Photo"
+      ],
+      "icon": "FileText",
+      "status": "Active",
+      "popular": true,
+      "estimated_time": "7-10 Working Days",
+      "whatsapp_message": "Hello Balaji Communication, I want to apply for Income Certificate."
+    },
+    {
+      "service_id": "srv-pm-kisan",
+      "service_name_en": "PM Kisan e-KYC & New Farmer Registration",
+      "service_name_hi": "पीएम किसान सम्मान निधि ई-केवाईसी एवं नया पंजीकरण",
+      "category": "Farmer & Agriculture",
+      "short_description_en": "Biometric thumb e-KYC, land seeding, and new farmer enrollment for Rs 6000 annual aid.",
+      "short_description_hi": "सालाना ₹6000 सहायता हेतु आधार बायोमेट्रिक ई-केवाईसी एवं खतौनी सत्यापन।",
+      "full_description_en": "Assistance with PM Kisan Samman Nidhi Yojana installment verification, bank NPCI seeding, and correction.",
+      "full_description_hi": "पीएम किसान की किस्त रुकने, बैंक खाता लिंक और नई खतौनी जोड़ने की पूरी सहायता।",
+      "required_documents": [
+        "Aadhaar Card",
+        "Bank Passbook",
+        "Khatauni (Land Record)",
+        "Mobile for OTP"
+      ],
+      "icon": "Heart",
+      "status": "Active",
+      "popular": true,
+      "estimated_time": "Instant Biometric / 7 Days Approval",
+      "whatsapp_message": "Hello Balaji Communication, I need help with PM Kisan e-KYC and installment."
+    },
+    {
       "service_id": "srv-muj4xqyz",
       "service_name_en": "PM Kisan Samman Nidhi E-KYC",
       "service_name_hi": "पीएम किसान सम्मान निधि ई-केवाईसी",
@@ -21,28 +102,6 @@
       "whatsapp_message": "Hello Balaji Communication, I want information about PM Kisan Samman Nidhi E-KYC.",
       "created_at": "2026-09-27T01:23:50.603Z",
       "updated_at": "2026-09-27T01:23:50.603Z"
-    },
-    {
-      "service_id": "srv-aadhaar-mob",
-      "service_name_en": "Aadhaar Mobile Number Update",
-      "service_name_hi": "आधार मोबाइल नंबर अपडेट / जोड़ना",
-      "category": "Aadhaar",
-      "short_description_en": "Quick assistance for linking or updating your active mobile number in your Aadhaar card.",
-      "short_description_hi": "अपने आधार कार्ड में चालू मोबाइल नंबर लिंक या अपडेट करवाने के लिए आसान सहायता।",
-      "full_description_en": "Updating your mobile number in Aadhaar is essential for receiving OTPs for banking, ITR verification, DigiLocker, and availing all government online benefits. We assist you with appointment booking, biometric verification guidance, and status tracking.",
-      "full_description_hi": "आधार में मोबाइल नंबर लिंक होना बैंक, डिजीलॉकर, राशन कार्ड और सरकारी योजनाओं के ओटीपी के लिए अनिवार्य है। हमारे केंद्र पर बायोमेट्रिक सत्यापन मार्गदर्शन और स्थिति जांच की पूरी सहायता उपलब्ध है।",
-      "required_documents": [
-        "Original Aadhaar Card (मूल आधार कार्ड)",
-        "Active Mobile SIM to be linked (चालू मोबाइल नंबर)",
-        "Physical presence of cardholder for biometric (बायोमेट्रिक के लिए व्यक्ति का उपस्थित होना)"
-      ],
-      "icon": "Smartphone",
-      "status": "Active",
-      "popular": true,
-      "estimated_time": "24-48 Hours after verification",
-      "whatsapp_message": "Hello Balaji Communication, I want information about Aadhaar Mobile Number Update.",
-      "created_at": "2026-01-10T10:00:00.000Z",
-      "updated_at": "2026-01-10T10:00:00.000Z"
     },
     {
       "service_id": "srv-aadhaar-corr",
@@ -245,29 +304,6 @@
       "updated_at": "2026-01-10T10:00:00.000Z"
     },
     {
-      "service_id": "srv-income-cert",
-      "service_name_en": "Income Certificate (आय प्रमाण पत्र)",
-      "service_name_hi": "आय प्रमाण पत्र ऑनलाइन आवेदन",
-      "category": "Certificates",
-      "short_description_en": "Government issued income certificate for student scholarships, fee concession, and schemes.",
-      "short_description_hi": "छात्रवृत्ति, स्कूल-कॉलेज प्रवेश एवं सरकारी योजनाओं हेतु अधिकृत आय प्रमाण पत्र।",
-      "full_description_en": "Assistance on state e-District portal for applying, uploading self-declaration, and downloading Tehsildar verified Income Certificate.",
-      "full_description_hi": "ई-डिस्ट्रिक्ट पोर्टल के माध्यम से स्वप्रमाणित घोषणा पत्र एवं आवश्यक दस्तावेजों के साथ आय प्रमाण पत्र का आवेदन।",
-      "required_documents": [
-        "Aadhaar Card of Applicant & Guardian (आधार कार्ड)",
-        "Self-Declaration Form (स्वप्रमाणित घोषणा पत्र)",
-        "Salary Slip or Salary Certificate (if employed) / Gram Pradhan/Councillor report",
-        "Passport Size Photo (पासपोर्ट साइज फोटो)"
-      ],
-      "icon": "FileCheck2",
-      "status": "Active",
-      "popular": true,
-      "estimated_time": "7-15 Working Days (Revenue Dept)",
-      "whatsapp_message": "Hello Balaji Communication, I want information about Income Certificate.",
-      "created_at": "2026-01-10T10:00:00.000Z",
-      "updated_at": "2026-01-10T10:00:00.000Z"
-    },
-    {
       "service_id": "srv-caste-cert",
       "service_name_en": "Caste Certificate (जाति प्रमाण पत्र)",
       "service_name_hi": "जाति प्रमाण पत्र (SC / ST / OBC / EWS)",
@@ -380,6 +416,24 @@
     }
   ],
   "enquiries": [
+    {
+      "enquiry_id": "BALAJI-APP-MUKUW7WB",
+      "customer_name": "xxxxxxxxxxxxx",
+      "applicant_name": "xxxxxxxxxxxxx",
+      "mobile": "8000000000",
+      "father_or_husband_name": "xxxxxxxxxxxxxxxxxx",
+      "address": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "village": "Gaini",
+      "service_id": "srv-aadhaar-mob",
+      "service_name": "आधार मोबाइल नंबर अपडेट / जोड़ना",
+      "category": "Aadhaar",
+      "message": "xxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "preferred_contact": "WhatsApp",
+      "status": "Contacted",
+      "urgency": "Normal",
+      "created_at": "2026-09-28T06:18:15.731Z",
+      "updated_at": "2026-09-28T06:23:05.084Z"
+    },
     {
       "enquiry_id": "BALAJI-APP-2609-4397",
       "customer_name": "Vikram Singh",
@@ -511,7 +565,9 @@
     "about_us_en": "Balaji Communication is a local digital service center providing assistance with government schemes, identity documents, online applications and various digital services. Our mission is to provide transparent, prompt and reliable assistance for citizens.",
     "footer_text_hi": "बालाजी कम्युनिकेशन एक स्वतंत्र डिजिटल सेवा सहायता केंद्र है और यह कोई आधिकारिक सरकारी वेबसाइट नहीं है। सभी सरकारी सेवाएं संबंधित विभाग के नियमों के अधीन हैं।",
     "footer_text_en": "Balaji Communication is an independent digital service assistance center and is not an official government website. All government services are subject to rules of the respective departments.",
-    "google_sheet_webapp_url": ""
+    "google_sheet_webapp_url": "https://script.google.com/macros/s/AKfycbxOCA56KF3-UanGLH7bGKa5SL6o-d-sCwZ7oW4piAzMGXPWnYSq6Rk8GfvkKiYM3BCD/exec",
+    "google_sheet_url": "https://script.google.com/macros/s/AKfycbxOCA56KF3-UanGLH7bGKa5SL6o-d-sCwZ7oW4piAzMGXPWnYSq6Rk8GfvkKiYM3BCD/exec",
+    "last_sheet_sync": "2026-09-28T06:17:12.183Z"
   },
   "adminCredentials": {
     "email": "admin@balaji.com",

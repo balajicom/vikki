@@ -4,48 +4,33 @@ export const GOOGLE_APPS_SCRIPT_CODE = `/**
  * MASTER GOOGLE APPS SCRIPT BACKEND (ALL TEMPLATES SUPPORTED)
  * =========================================================================
  * 
- * INSTRUCTIONS:
+ * QUICK SETUP GUIDE:
  * 1. Open Google Sheets at https://sheets.new
  * 2. Rename spreadsheet: "Balaji Communication Master Database"
  * 3. Go to Extensions > Apps Script
- * 4. Paste this complete code into Code.gs (replacing everything)
- * 5. In Apps Script toolbar, select "setupAllTemplateSheets" from the dropdown and click "Run"
- *    -> This will AUTOMATICALLY create and format all 7 tabs:
- *       - Services
- *       - Enquiries
- *       - PriceList
- *       - NoticeBoard
- *       - QuickLinks
- *       - Citizens
- *       - Settings
- * 6. Click "Deploy" > "New deployment" > Select type: "Web app"
- *    - Execute as: "Me"
- *    - Who has access: "Anyone"
- * 7. Copy the Web App URL and paste it in Balaji Admin Dashboard > Google Sheets tab!
+ * 4. Paste this complete code into Code.gs (replacing any existing code)
+ * 5. In toolbar dropdown, select "setupAllTemplateSheets" and click "Run"
+ *    -> Click "Review permissions" -> Select your Google Account -> Click "Advanced" -> "Go to (unsafe)" -> "Allow"
+ *    -> This creates all 7 tabs automatically (Services, Enquiries, PriceList, etc.)
+ * 6. Click "Deploy" > "New deployment"
+ *    - Click the gear icon (Select type) -> Choose "Web app"
+ *    - Description: "Balaji Database API"
+ *    - Execute as: "Me" (your Google account)
+ *    - WHO HAS ACCESS: "Anyone"  <--- [VERY IMPORTANT! Do NOT select "Only myself"]
+ *      (If "Only myself" is selected, Google blocks access and redirects to a login page)
+ * 7. Click "Deploy" -> Copy the Web App URL (ends with "/exec")
+ * 8. Paste into Balaji Admin Dashboard > "Google Spreadsheet Link or Apps Script Web App URL" box!
  */
 
 function doGet(e) {
-  var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : "getServices";
+  var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : "getAllData";
   var result = { status: "error", message: "Invalid action" };
   
   try {
-    if (action === "getServices") {
-      result = { status: "success", data: getServicesList() };
-    } else if (action === "getEnquiries") {
-      result = { status: "success", data: getEnquiriesList() };
-    } else if (action === "getPriceList") {
-      result = { status: "success", data: getPriceListData() };
-    } else if (action === "getNotices") {
-      result = { status: "success", data: getNoticesData() };
-    } else if (action === "getQuickLinks") {
-      result = { status: "success", data: getQuickLinksData() };
-    } else if (action === "getCitizens") {
-      result = { status: "success", data: getCitizensData() };
-    } else if (action === "getSettings") {
-      result = { status: "success", data: getSettingsData() };
-    } else if (action === "getAllData") {
+    if (action === "getAllData" || action === "all") {
       result = {
         status: "success",
+        message: "Balaji Google Apps Script Backend is Live!",
         data: {
           services: getServicesList(),
           enquiries: getEnquiriesList(),
@@ -55,6 +40,26 @@ function doGet(e) {
           citizens: getCitizensData(),
           settings: getSettingsData()
         }
+      };
+    } else if (action === "getServices" || action === "services") {
+      result = { status: "success", data: getServicesList() };
+    } else if (action === "getEnquiries" || action === "enquiries") {
+      result = { status: "success", data: getEnquiriesList() };
+    } else if (action === "getPriceList" || action === "pricelist") {
+      result = { status: "success", data: getPriceListData() };
+    } else if (action === "getNotices" || action === "notices") {
+      result = { status: "success", data: getNoticesData() };
+    } else if (action === "getQuickLinks" || action === "quicklinks") {
+      result = { status: "success", data: getQuickLinksData() };
+    } else if (action === "getCitizens" || action === "citizens") {
+      result = { status: "success", data: getCitizensData() };
+    } else if (action === "getSettings" || action === "settings") {
+      result = { status: "success", data: getSettingsData() };
+    } else if (action === "ping" || action === "status") {
+      result = {
+        status: "success",
+        message: "Google Apps Script Web App is connected and working!",
+        timestamp: new Date().toISOString()
       };
     }
   } catch (err) {
@@ -265,6 +270,12 @@ function formatHeaderRow(sheet, bgColor) {
 function getServicesList() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName("Services");
+  if (!sheet) {
+    try {
+      setupAllTemplateSheets();
+      sheet = ss.getSheetByName("Services");
+    } catch (e) {}
+  }
   if (!sheet) return [];
   var data = sheet.getDataRange().getValues();
   if (data.length <= 1) return [];

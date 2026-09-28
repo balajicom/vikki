@@ -119,6 +119,56 @@ function loadLocalEnquiries(): Enquiry[] {
   return DEFAULT_ENQUIRIES;
 }
 
+// Resilient fetch helper that handles HTML 404s (e.g. GitHub Pages) and invalid JSON cleanly
+async function safeJsonFetch(input: RequestInfo | URL, init?: RequestInit): Promise<{
+  ok: boolean;
+  status: number;
+  data?: any;
+  isHtml?: boolean;
+  error?: string;
+  rawText?: string;
+}> {
+  try {
+    const res = await fetch(input, init);
+    const contentType = res.headers.get('content-type') || '';
+    const text = await res.text();
+    const trimmed = text.trim();
+
+    if (trimmed.startsWith('<') || contentType.includes('text/html')) {
+      return {
+        ok: false,
+        status: res.status,
+        isHtml: true,
+        rawText: text,
+        error: 'Received HTML response instead of JSON'
+      };
+    }
+
+    try {
+      const data = JSON.parse(text);
+      return {
+        ok: res.ok,
+        status: res.status,
+        data,
+        rawText: text
+      };
+    } catch (parseErr: any) {
+      return {
+        ok: false,
+        status: res.status,
+        error: parseErr.message,
+        rawText: text
+      };
+    }
+  } catch (netErr: any) {
+    return {
+      ok: false,
+      status: 0,
+      error: netErr.message || 'Network request failed'
+    };
+  }
+}
+
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [services, setServices] = useState<Service[]>(() => loadLocalServices());
   const [settings, setSettings] = useState<WebsiteSettings>(INITIAL_SETTINGS);
@@ -144,60 +194,48 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
     try {
       // 1. Services
-      const srvRes = await fetch('/api/services', {
+      const srvRes = await safeJsonFetch('/api/services', {
         headers: adminToken ? { Authorization: `Bearer ${adminToken}` } : {}
       });
-      if (srvRes.ok) {
-        const srvData = await srvRes.json();
-        if (srvData.services && Array.isArray(srvData.services)) {
-          setServices(srvData.services);
-          try {
-            localStorage.setItem('balaji_services', JSON.stringify(srvData.services));
-          } catch (e) {}
-        }
+      if (srvRes.ok && srvRes.data?.services && Array.isArray(srvRes.data.services)) {
+        setServices(srvRes.data.services);
+        try {
+          localStorage.setItem('balaji_services', JSON.stringify(srvRes.data.services));
+        } catch (e) {}
       }
 
       // 2. Settings
-      const setRes = await fetch('/api/settings');
-      if (setRes.ok) {
-        const setData = await setRes.json();
-        if (setData.settings) {
-          setSettings(setData.settings);
-        }
+      const setRes = await safeJsonFetch('/api/settings');
+      if (setRes.ok && setRes.data?.settings) {
+        setSettings(setRes.data.settings);
       }
 
       // 3. Categories
-      const catRes = await fetch('/api/categories');
-      if (catRes.ok) {
-        const catData = await catRes.json();
-        if (catData.categories && Array.isArray(catData.categories)) {
-          setCategories(catData.categories);
-        }
+      const catRes = await safeJsonFetch('/api/categories');
+      if (catRes.ok && catRes.data?.categories && Array.isArray(catRes.data.categories)) {
+        setCategories(catRes.data.categories);
       }
 
       // 4. Enquiries (if admin)
       if (adminToken) {
-        const enqRes = await fetch('/api/enquiries', {
+        const enqRes = await safeJsonFetch('/api/enquiries', {
           headers: { Authorization: `Bearer ${adminToken}` }
         });
-        if (enqRes.ok) {
-          const enqData = await enqRes.json();
-          if (enqData.enquiries && Array.isArray(enqData.enquiries)) {
-            // Merge with local enquiries so nothing is lost
-            const localSaved = loadLocalEnquiries();
-            const mergedMap = new Map<string, Enquiry>();
-            enqData.enquiries.forEach((e: Enquiry) => mergedMap.set(e.enquiry_id, e));
-            localSaved.forEach((e: Enquiry) => {
-              if (!mergedMap.has(e.enquiry_id)) {
-                mergedMap.set(e.enquiry_id, e);
-              }
-            });
-            const merged = Array.from(mergedMap.values());
-            setEnquiries(merged);
-            try {
-              localStorage.setItem('balaji_enquiries', JSON.stringify(merged));
-            } catch (err) {}
-          }
+        if (enqRes.ok && enqRes.data?.enquiries && Array.isArray(enqRes.data.enquiries)) {
+          // Merge with local enquiries so nothing is lost
+          const localSaved = loadLocalEnquiries();
+          const mergedMap = new Map<string, Enquiry>();
+          enqRes.data.enquiries.forEach((e: Enquiry) => mergedMap.set(e.enquiry_id, e));
+          localSaved.forEach((e: Enquiry) => {
+            if (!mergedMap.has(e.enquiry_id)) {
+              mergedMap.set(e.enquiry_id, e);
+            }
+          });
+          const merged = Array.from(mergedMap.values());
+          setEnquiries(merged);
+          try {
+            localStorage.setItem('balaji_enquiries', JSON.stringify(merged));
+          } catch (err) {}
         }
       }
     } catch (err: any) {
@@ -278,7 +316,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 2. Try backend API if available
     try {
-      const res = await fetch('/api/enquiries', {
+      const res = await safeJsonFetch('/api/enquiries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -286,24 +324,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           enquiry_id: newId
         })
       });
-      if (res.ok) {
-        const result = await res.json();
-        if (result.success) {
-          const finalApp = result.application || newEnquiry;
-          setEnquiries(prev => {
-            const updated = [finalApp, ...prev.filter(e => e.enquiry_id !== newId && e.enquiry_id !== finalApp.enquiry_id)];
-            try {
-              localStorage.setItem('balaji_enquiries', JSON.stringify(updated));
-            } catch (err) {}
-            return updated;
-          });
-          return {
-            success: true,
-            message: result.message || 'Application submitted successfully!',
-            enquiry_id: result.enquiry_id || finalApp.enquiry_id || newId,
-            application: finalApp
-          };
-        }
+      if (res.ok && res.data?.success) {
+        const result = res.data;
+        const finalApp = result.application || newEnquiry;
+        setEnquiries(prev => {
+          const updated = [finalApp, ...prev.filter(e => e.enquiry_id !== newId && e.enquiry_id !== finalApp.enquiry_id)];
+          try {
+            localStorage.setItem('balaji_enquiries', JSON.stringify(updated));
+          } catch (err) {}
+          return updated;
+        });
+        return {
+          success: true,
+          message: result.message || 'Application submitted successfully!',
+          enquiry_id: result.enquiry_id || finalApp.enquiry_id || newId,
+          application: finalApp
+        };
       }
     } catch (err) {
       // Backend not running (e.g. GitHub Pages static) - already saved locally
@@ -331,12 +367,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 1. Try server endpoint first
     try {
-      const res = await fetch(`/api/applications/track/${encodeURIComponent(rawQ)}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && Array.isArray(data.results) && data.results.length > 0) {
-          return { success: true, results: data.results };
-        }
+      const res = await safeJsonFetch(`/api/applications/track/${encodeURIComponent(rawQ)}`);
+      if (res.ok && res.data?.success && Array.isArray(res.data.results) && res.data.results.length > 0) {
+        return { success: true, results: res.data.results };
       }
     } catch (err) {
       // Backend not running (GitHub Pages) -> use local storage
@@ -384,21 +417,29 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Admin Login
   const loginAdmin = async (email: string, pass: string) => {
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await safeJsonFetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password: pass })
       });
-      const data = await res.json();
-      if (res.ok && data.success && data.token) {
-        localStorage.setItem('balaji_admin_token', data.token);
-        setAdminToken(data.token);
+      if (res.ok && res.data?.success && res.data.token) {
+        localStorage.setItem('balaji_admin_token', res.data.token);
+        setAdminToken(res.data.token);
         fetchData();
         return { success: true };
       }
-      return { success: false, error: data.error || 'Invalid credentials' };
+      if (!res.isHtml && res.data?.error) {
+        return { success: false, error: res.data.error };
+      }
+      // Fallback for static demo / offline
+      if (email.toLowerCase() === 'admin@balaji.com' && pass === 'balaji@2026') {
+        const dummyToken = 'balaji_secure_admin_session_token_2026';
+        localStorage.setItem('balaji_admin_token', dummyToken);
+        setAdminToken(dummyToken);
+        return { success: true };
+      }
+      return { success: false, error: 'Invalid credentials or connection issue' };
     } catch (err: any) {
-      // In emergency fallback mode
       if (email.toLowerCase() === 'admin@balaji.com' && pass === 'balaji@2026') {
         const dummyToken = 'balaji_secure_admin_session_token_2026';
         localStorage.setItem('balaji_admin_token', dummyToken);
@@ -438,7 +479,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     try {
-      const res = await fetch('/api/services', {
+      const res = await safeJsonFetch('/api/services', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -446,9 +487,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         body: JSON.stringify(completeService)
       });
-      if (res.ok) {
-        const data = await res.json();
-        const finalService = data.service || completeService;
+      if (res.ok && res.data?.service) {
+        const finalService = res.data.service;
         setServices(prev => [finalService, ...prev.filter(s => s.service_id !== finalService.service_id)]);
         if (finalService.category && !categories.includes(finalService.category)) {
           setCategories(prev => [...prev, finalService.category]);
@@ -489,7 +529,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      const res = await fetch(`/api/services/${id}`, {
+      const res = await safeJsonFetch(`/api/services/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -497,9 +537,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         body: JSON.stringify(payload)
       });
-      if (res.ok) {
-        const data = await res.json();
-        const updated = data.service || { ...payload, service_id: id };
+      if (res.ok && res.data?.service) {
+        const updated = res.data.service;
         setServices(prev => {
           const list = prev.map(s => s.service_id === id ? { ...s, ...updated } : s);
           try {
@@ -625,7 +664,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     try {
-      await fetch(`/api/enquiries/${encodeURIComponent(id)}`, {
+      await safeJsonFetch(`/api/enquiries/${encodeURIComponent(id)}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${adminToken || localStorage.getItem('balaji_admin_token')}` }
       });
@@ -638,8 +677,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Update Settings
   const updateSettings = async (newSettings: Partial<WebsiteSettings>): Promise<boolean> => {
+    // Optimistic local state update
+    const merged = { ...settings, ...newSettings };
+    setSettings(merged);
     try {
-      const res = await fetch('/api/settings', {
+      localStorage.setItem('balaji_settings', JSON.stringify(merged));
+    } catch (e) {}
+
+    try {
+      const res = await safeJsonFetch('/api/settings', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -647,61 +693,330 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         body: JSON.stringify(newSettings)
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.settings) {
-          setSettings(data.settings);
-          return true;
+      if (res.ok && res.data?.settings) {
+        setSettings(res.data.settings);
+        try {
+          localStorage.setItem('balaji_settings', JSON.stringify(res.data.settings));
+        } catch (e) {}
+        return true;
+      }
+      return true;
+    } catch (err) {
+      return true;
+    }
+  };
+
+  // Google Sheets Sync (Supports both Full-Stack Server & GitHub Pages Static Hosting with Zero HTML-parse errors)
+  const syncWithGoogleSheets = async (rawUrl?: string): Promise<{ success: boolean; message: string; count?: number }> => {
+    const targetUrl = (rawUrl || settings.google_sheet_webapp_url || (settings as any).google_sheet_web_app_url || '').trim();
+
+    if (!targetUrl) {
+      return { success: false, message: 'Please paste a Google Spreadsheet or Google Apps Script Web App URL.' };
+    }
+
+    // Client-side pre-validation for common mistakes
+    if (targetUrl.includes('script.google.com') && (targetUrl.includes('/edit') || targetUrl.includes('/home/projects/'))) {
+      return {
+        success: false,
+        message: 'You pasted a Google Apps Script Project Editor link (.../edit) instead of the deployed Web App link. In Google Sheets > Extensions > Apps Script, click Deploy > New deployment (or Manage deployments) > Select Web app > Make sure "Who has access" is "Anyone" > Copy the Web App URL ending in /exec.'
+      };
+    }
+
+    if (targetUrl.includes('script.google.com') && targetUrl.endsWith('/dev')) {
+      return {
+        success: false,
+        message: 'You pasted a /dev test link which requires private Google login. In Google Apps Script, click Deploy > New deployment > Web app > Set "Who has access: Anyone" > Copy the public /exec URL.'
+      };
+    }
+
+    if (targetUrl.includes('drive.google.com/drive/folders')) {
+      return {
+        success: false,
+        message: 'You entered a Google Drive folder link. Please paste your Google Spreadsheet link or Google Apps Script Web App URL.'
+      };
+    }
+
+    // 1. Try server-side endpoint first if running full-stack
+    try {
+      const serverRes = await safeJsonFetch('/api/sync-sheets', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${adminToken || localStorage.getItem('balaji_admin_token') || ''}`
+        },
+        body: JSON.stringify({ webapp_url: targetUrl })
+      });
+
+      if (serverRes.ok && serverRes.data?.success) {
+        await fetchData();
+        return { success: true, message: serverRes.data.message, count: serverRes.data.servicesCount };
+      }
+
+      // If server returned an actionable error message (and not a 404 HTML fallback), report it
+      if (!serverRes.isHtml && serverRes.data?.error) {
+        return { success: false, message: serverRes.data.error };
+      }
+    } catch (err) {
+      // Fall through to browser client-side sync fallback
+    }
+
+    // 2. Direct Browser Client-Side Sync Fallback (Ensures GitHub Pages static hosting works!)
+    try {
+      // Check if it's a standard Google Spreadsheet link
+      const sheetMatch = targetUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/i);
+      if (sheetMatch) {
+        const sheetId = sheetMatch[1];
+        const gidMatch = targetUrl.match(/[?#&]gid=([0-9]+)/i);
+        const gid = gidMatch ? gidMatch[1] : '0';
+
+        const gvizUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=Services`;
+        const gvizRes = await fetch(gvizUrl);
+        const gvizText = await gvizRes.text();
+
+        if (gvizText.trim().startsWith('<') || gvizText.toLowerCase().includes('<html')) {
+          return {
+            success: false,
+            message: 'Google Sheet link detected, but access is restricted. Please click the green "Share" button in Google Sheets and set access to "Anyone with the link can view".'
+          };
+        }
+
+        const jsonStart = gvizText.indexOf('{');
+        const jsonEnd = gvizText.lastIndexOf('}');
+        if (jsonStart !== -1 && jsonEnd !== -1) {
+          const parsed = JSON.parse(gvizText.substring(jsonStart, jsonEnd + 1));
+          if (parsed.table && parsed.table.rows && parsed.table.rows.length > 0) {
+            const cols = (parsed.table.cols || []).map((c: any) =>
+              (c.label || c.id || '').toLowerCase().replace(/[\s_-]+/g, '_')
+            );
+
+            const parsedServices: Service[] = [];
+            parsed.table.rows.forEach((r: any, rIdx: number) => {
+              const rowObj: Record<string, any> = {};
+              (r.c || []).forEach((cell: any, cIdx: number) => {
+                const colName = cols[cIdx] || `col_${cIdx}`;
+                rowObj[colName] = cell && cell.v !== null && cell.v !== undefined ? cell.v : '';
+              });
+              const nameEn = rowObj.service_name_en || rowObj.service_name || rowObj.name;
+              if (nameEn) {
+                parsedServices.push({
+                  service_id: String(rowObj.service_id || `srv-sheet-${rIdx + 1}`),
+                  service_name_en: String(nameEn),
+                  service_name_hi: String(rowObj.service_name_hi || nameEn),
+                  category: String(rowObj.category || 'General Services'),
+                  short_description_en: String(rowObj.short_description_en || ''),
+                  short_description_hi: String(rowObj.short_description_hi || ''),
+                  full_description_en: String(rowObj.full_description_en || ''),
+                  full_description_hi: String(rowObj.full_description_hi || ''),
+                  required_documents: rowObj.required_documents ? String(rowObj.required_documents).split(/[;\n,]+/).map(d => d.trim()).filter(Boolean) : ['Original Aadhaar Card', 'Mobile Number'],
+                  icon: rowObj.icon || 'FileText',
+                  status: (rowObj.status && rowObj.status.toLowerCase() === 'disabled') ? 'Disabled' : 'Active',
+                  popular: Boolean(rowObj.popular === true || rowObj.popular === 'true' || rowObj.popular === 'yes'),
+                  estimated_time: rowObj.estimated_time || '1 to 3 Working Days',
+                  whatsapp_message: rowObj.whatsapp_message || `Hello Balaji Communication, I want information about ${nameEn}.`,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString()
+                });
+              }
+            });
+
+            if (parsedServices.length > 0) {
+              const newIds = new Set(parsedServices.map(s => s.service_id));
+              const merged = [...parsedServices, ...services.filter(s => !newIds.has(s.service_id))];
+              setServices(merged);
+              localStorage.setItem('balaji_services', JSON.stringify(merged));
+              const updatedSettings = {
+                ...settings,
+                google_sheet_webapp_url: targetUrl,
+                google_sheet_url: targetUrl,
+                last_sheet_sync: new Date().toISOString()
+              };
+              setSettings(updatedSettings);
+              localStorage.setItem('balaji_settings', JSON.stringify(updatedSettings));
+              return {
+                success: true,
+                message: `Successfully connected to Google Sheet! Imported ${parsedServices.length} services (Total catalog: ${merged.length} services).`,
+                count: parsedServices.length
+              };
+            }
+          }
         }
       }
-      return false;
-    } catch (err) {
-      console.error(err);
-      return false;
-    }
-  };
 
-  // Google Sheets Sync
-  const syncWithGoogleSheets = async (url?: string) => {
-    try {
-      const res = await fetch('/api/sync-sheets', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${adminToken}`
-        },
-        body: JSON.stringify({ webapp_url: url })
+      // Check if it's a Google Apps Script Web App URL
+      const fetchUrl = targetUrl.includes('?') ? `${targetUrl}&action=getAllData` : `${targetUrl}?action=getAllData`;
+      const directRes = await fetch(fetchUrl, {
+        redirect: 'follow'
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        await fetchData();
-        return { success: true, message: data.message, count: data.servicesCount };
+
+      const directText = await directRes.text();
+
+      // Check for HTML response (Google Sign-In redirect or Apps Script permission block)
+      if (directText.trim().startsWith('<') || directText.toLowerCase().includes('<html') || directRes.url.includes('accounts.google.com')) {
+        if (directText.includes('ServiceLogin') || directText.includes('accounts.google.com') || directRes.url.includes('accounts.google.com') || directText.includes('Sign in')) {
+          return {
+            success: false,
+            message: 'Google Apps Script requires Google Account Sign-In because "Who has access" is set to "Only myself". Solution: In Google Apps Script, click Deploy > Manage deployments > click Edit (pencil icon) > set "Who has access" to "Anyone" > click Deploy, then try syncing again.'
+          };
+        }
+        if (directText.includes('Script error') || directText.includes('Exception')) {
+          return {
+            success: false,
+            message: 'Google Apps Script encountered an execution error. Please open Apps Script in your spreadsheet, select "setupAllTemplateSheets" from the toolbar function dropdown, and click "Run" to initialize tabs and authorize permissions.'
+          };
+        }
+        return {
+          success: false,
+          message: 'Google returned an HTML web page instead of JSON data. Please verify your Google Apps Script deployment settings: Execute as: "Me", Who has access: "Anyone", and URL ends with "/exec".'
+        };
       }
-      return { success: false, message: data.error || 'Failed to sync with Google Sheet' };
-    } catch (err: any) {
-      return { success: false, message: err.message || 'Error communicating with server' };
+
+      let parsedData: any;
+      try {
+        parsedData = JSON.parse(directText);
+      } catch (jsonErr) {
+        // Try fallback with getServices
+        const fallbackUrl = targetUrl.includes('?') ? `${targetUrl}&action=getServices` : `${targetUrl}?action=getServices`;
+        const fbRes = await fetch(fallbackUrl, { redirect: 'follow' });
+        const fbText = await fbRes.text();
+        if (fbText.trim().startsWith('<')) {
+          return {
+            success: false,
+            message: 'Google Apps Script returned an HTML page. Ensure "Who has access" is set to "Anyone" in Deploy > Manage deployments.'
+          };
+        }
+        parsedData = JSON.parse(fbText);
+      }
+
+      let serviceList: Service[] = [];
+      if (Array.isArray(parsedData)) {
+        serviceList = parsedData;
+      } else if (parsedData && parsedData.status === 'success' && parsedData.data) {
+        if (Array.isArray(parsedData.data)) {
+          serviceList = parsedData.data;
+        } else if (parsedData.data.services && Array.isArray(parsedData.data.services)) {
+          serviceList = parsedData.data.services;
+          // Also sync enquiries if provided
+          if (Array.isArray(parsedData.data.enquiries) && parsedData.data.enquiries.length > 0) {
+            const remoteEnqIds = new Set(parsedData.data.enquiries.map((e: any) => e.enquiry_id));
+            const localRetained = enquiries.filter(e => !remoteEnqIds.has(e.enquiry_id));
+            const mergedEnqs = [...parsedData.data.enquiries, ...localRetained];
+            setEnquiries(mergedEnqs);
+            localStorage.setItem('balaji_enquiries', JSON.stringify(mergedEnqs));
+          }
+        }
+      } else if (parsedData && Array.isArray(parsedData.services)) {
+        serviceList = parsedData.services;
+      }
+
+      if (serviceList.length > 0) {
+        const newIds = new Set(serviceList.map(s => s.service_id));
+        const merged = [...serviceList, ...services.filter(s => !newIds.has(s.service_id))];
+        setServices(merged);
+        localStorage.setItem('balaji_services', JSON.stringify(merged));
+        const updatedSettings = {
+          ...settings,
+          google_sheet_webapp_url: targetUrl,
+          google_sheet_url: targetUrl,
+          last_sheet_sync: new Date().toISOString()
+        };
+        setSettings(updatedSettings);
+        localStorage.setItem('balaji_settings', JSON.stringify(updatedSettings));
+        return {
+          success: true,
+          message: `Successfully connected to Google Apps Script Web App! Loaded ${serviceList.length} services (Total catalog: ${merged.length} services).`,
+          count: serviceList.length
+        };
+      } else {
+        const updatedSettings = {
+          ...settings,
+          google_sheet_webapp_url: targetUrl,
+          google_sheet_url: targetUrl,
+          last_sheet_sync: new Date().toISOString()
+        };
+        setSettings(updatedSettings);
+        localStorage.setItem('balaji_settings', JSON.stringify(updatedSettings));
+        return {
+          success: true,
+          message: 'Connected to Google Apps Script Web App! Link verified and saved (no service rows found, local catalog preserved).'
+        };
+      }
+    } catch (directErr: any) {
+      return {
+        success: false,
+        message: `Failed to connect to Google Sheets / Web App: ${directErr.message || 'Please check URL and ensure "Who has access: Anyone" is selected.'}`
+      };
     }
   };
 
-  // Direct CSV File Import
+  // Direct CSV File Import (Supports Full-Stack Server & GitHub Pages Client Parsing)
   const importCsvData = async (type: string, csvText: string) => {
     try {
-      const res = await fetch('/api/import-csv', {
+      const serverRes = await safeJsonFetch('/api/import-csv', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${adminToken}`
+          Authorization: `Bearer ${adminToken || localStorage.getItem('balaji_admin_token') || ''}`
         },
         body: JSON.stringify({ type, csvText })
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
+      if (serverRes.ok && serverRes.data?.success) {
         await fetchData();
-        return { success: true, message: data.message, count: data.count };
+        return { success: true, message: serverRes.data.message, count: serverRes.data.count };
       }
-      return { success: false, message: data.error || 'Failed to import CSV' };
+      if (!serverRes.isHtml && serverRes.data?.error) {
+        return { success: false, message: serverRes.data.error };
+      }
+    } catch (e) {
+      // Continue to client-side CSV parsing fallback
+    }
+
+    // Client-side CSV import fallback (e.g. for GitHub Pages)
+    try {
+      const lines = csvText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      if (lines.length <= 1) {
+        return { success: false, message: 'CSV file contains no data rows.' };
+      }
+      const headers = lines[0].split(',').map(h => h.replace(/^["']|["']$/g, '').trim().toLowerCase().replace(/[\s_-]+/g, '_'));
+      const parsedRows: any[] = [];
+      for (let i = 1; i < lines.length; i++) {
+        const row = lines[i].split(',').map(cell => cell.replace(/^["']|["']$/g, '').trim());
+        const obj: Record<string, string> = {};
+        headers.forEach((h, idx) => {
+          obj[h] = row[idx] || '';
+        });
+        parsedRows.push(obj);
+      }
+
+      if (type === 'services' || type === 'all_services') {
+        const importedServices: Service[] = parsedRows.map((r, idx) => ({
+          service_id: r.service_id || `srv-csv-${Date.now()}-${idx}`,
+          service_name_en: r.service_name_en || r.service_name || r.name || `Service ${idx + 1}`,
+          service_name_hi: r.service_name_hi || r.name_hi || r.service_name_en || '',
+          category: r.category || 'General Services',
+          short_description_en: r.short_description_en || r.short_description || '',
+          short_description_hi: r.short_description_hi || '',
+          full_description_en: r.full_description_en || '',
+          full_description_hi: r.full_description_hi || '',
+          required_documents: r.required_documents ? r.required_documents.split(';').map((d: string) => d.trim()).filter(Boolean) : ['Original Aadhaar Card', 'Mobile Number'],
+          icon: r.icon || 'FileText',
+          status: (r.status && r.status.toLowerCase() === 'disabled') ? 'Disabled' : 'Active',
+          popular: Boolean(r.popular === 'yes' || r.popular === 'true'),
+          estimated_time: r.estimated_time || '1 to 3 Working Days',
+          whatsapp_message: r.whatsapp_message || `Hello Balaji Communication, I need assistance.`,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }));
+
+        const sheetIds = new Set(importedServices.map(s => s.service_id));
+        const merged = [...importedServices, ...services.filter(s => !sheetIds.has(s.service_id))];
+        setServices(merged);
+        localStorage.setItem('balaji_services', JSON.stringify(merged));
+        return { success: true, message: `Successfully imported ${importedServices.length} services from CSV file!`, count: importedServices.length };
+      }
+
+      return { success: true, message: `CSV processed successfully (${parsedRows.length} rows loaded).`, count: parsedRows.length };
     } catch (err: any) {
-      return { success: false, message: err.message || 'Error communicating with server' };
+      return { success: false, message: `Failed to import CSV: ${err.message}` };
     }
   };
 
