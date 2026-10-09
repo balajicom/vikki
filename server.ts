@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
-import { INITIAL_SERVICES, INITIAL_SETTINGS, CATEGORIES, INITIAL_ENQUIRIES } from './src/data/initialData';
+import { INITIAL_SERVICES, INITIAL_SETTINGS, CATEGORIES, INITIAL_ENQUIRIES, INITIAL_PRICELIST, INITIAL_NOTICES, INITIAL_QUICKLINKS } from './src/data/initialData';
 import { Service, Enquiry, WebsiteSettings, PriceListItem, NoticeItem, QuickLinkItem, CitizenRecord } from './src/types';
 import { SHEET_TEMPLATES, generateCsvContent } from './src/data/sheetTemplates';
 
@@ -42,9 +42,22 @@ function loadDatabase(): DatabaseSchema {
       if (!parsed.settings.address_en || parsed.settings.address_en.includes('Sector 12')) {
         parsed.settings = { ...parsed.settings, ...INITIAL_SETTINGS };
       }
-      // Ensure enquiries are seeded if empty
-      if (!Array.isArray(parsed.enquiries) || parsed.enquiries.length === 0) {
-        parsed.enquiries = INITIAL_ENQUIRIES;
+      // Ensure clean array for enquiries (no fake test enquiries)
+      if (!Array.isArray(parsed.enquiries)) {
+        parsed.enquiries = [];
+      }
+      // Ensure sheet datasets are initialized
+      if (!Array.isArray(parsed.priceList)) {
+        parsed.priceList = INITIAL_PRICELIST;
+      }
+      if (!Array.isArray(parsed.notices)) {
+        parsed.notices = INITIAL_NOTICES;
+      }
+      if (!Array.isArray(parsed.quickLinks)) {
+        parsed.quickLinks = INITIAL_QUICKLINKS;
+      }
+      if (!Array.isArray(parsed.citizens)) {
+        parsed.citizens = [];
       }
       return parsed;
     }
@@ -52,11 +65,15 @@ function loadDatabase(): DatabaseSchema {
     console.error('Error reading db.json, falling back to defaults:', err);
   }
 
-  // Initial seed with services and initial enquiries
+  // Initial seed with services and clean empty enquiries
   const initialDb: DatabaseSchema = {
     services: INITIAL_SERVICES,
-    enquiries: INITIAL_ENQUIRIES,
+    enquiries: [],
     settings: INITIAL_SETTINGS,
+    priceList: INITIAL_PRICELIST,
+    notices: INITIAL_NOTICES,
+    quickLinks: INITIAL_QUICKLINKS,
+    citizens: [],
     adminCredentials: {
       email: "admin@balaji.com",
       passwordHash: "balaji@2026"
@@ -78,6 +95,24 @@ function saveDatabase(database: DatabaseSchema) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
     fs.writeFileSync(DB_FILE, JSON.stringify(database, null, 2));
+
+    // Automatically sync Google Sheet URL to public/config.json for GitHub Pages
+    try {
+      const sheetUrl = database.settings.google_sheet_webapp_url || database.settings.google_sheet_url || '';
+      const pubConfig = path.join(process.cwd(), 'public', 'config.json');
+      fs.writeFileSync(pubConfig, JSON.stringify({
+        google_sheet_webapp_url: sheetUrl,
+        last_updated: new Date().toISOString()
+      }, null, 2));
+
+      const distConfig = path.join(process.cwd(), 'dist', 'config.json');
+      if (fs.existsSync(path.dirname(distConfig))) {
+        fs.writeFileSync(distConfig, JSON.stringify({
+          google_sheet_webapp_url: sheetUrl,
+          last_updated: new Date().toISOString()
+        }, null, 2));
+      }
+    } catch (cfgErr) {}
   } catch (err) {
     console.error('Error saving db.json:', err);
   }
@@ -398,13 +433,34 @@ async function syncFromGoogleSource(inputUrl: string): Promise<{
     } else if (data && data.status === 'success' && data.data) {
       if (Array.isArray(data.data)) {
         serviceList = data.data;
-      } else if (data.data.services && Array.isArray(data.data.services)) {
-        serviceList = data.data.services;
-        // Also sync enquiries if provided
-        if (Array.isArray(data.data.enquiries) && data.data.enquiries.length > 0) {
-          const remoteEnqIds = new Set(data.data.enquiries.map((e: any) => e.enquiry_id));
-          const localRetained = db.enquiries.filter(e => !remoteEnqIds.has(e.enquiry_id));
-          db.enquiries = [...data.data.enquiries, ...localRetained];
+      } else if (typeof data.data === 'object') {
+        // 1. Services
+        if (data.data.services && Array.isArray(data.data.services)) {
+          serviceList = data.data.services;
+        }
+        // 2. Citizen Enquiries
+        if (Array.isArray(data.data.enquiries)) {
+          db.enquiries = data.data.enquiries;
+        }
+        // 3. Price List
+        if (Array.isArray(data.data.priceList) && data.data.priceList.length > 0) {
+          db.priceList = data.data.priceList;
+        }
+        // 4. Notice Board
+        if (Array.isArray(data.data.notices) && data.data.notices.length > 0) {
+          db.notices = data.data.notices;
+        }
+        // 5. Quick Links
+        if (Array.isArray(data.data.quickLinks) && data.data.quickLinks.length > 0) {
+          db.quickLinks = data.data.quickLinks;
+        }
+        // 6. Citizens
+        if (Array.isArray(data.data.citizens)) {
+          db.citizens = data.data.citizens;
+        }
+        // 7. Settings
+        if (data.data.settings && typeof data.data.settings === 'object') {
+          db.settings = { ...db.settings, ...data.data.settings };
         }
       }
     } else if (data && Array.isArray(data.services)) {
@@ -421,7 +477,7 @@ async function syncFromGoogleSource(inputUrl: string): Promise<{
       saveDatabase(db);
       return {
         success: true,
-        message: `Successfully connected to Google Apps Script Web App! Loaded ${serviceList.length} services (Total catalog: ${db.services.length} services).`,
+        message: `Successfully connected to Google Sheet! Synced ${serviceList.length} services, ${db.enquiries.length} enquiries, ${(db.priceList || []).length} rate cards, ${(db.notices || []).length} notices, and ${(db.quickLinks || []).length} portals.`,
         count: serviceList.length,
         sourceType: 'webapp',
         services: db.services
@@ -433,7 +489,7 @@ async function syncFromGoogleSource(inputUrl: string): Promise<{
       saveDatabase(db);
       return {
         success: true,
-        message: 'Successfully connected to Google Apps Script Web App! Database link verified (no service rows found in sheet, local catalog preserved).',
+        message: `Connected to Google Apps Script! Link verified and saved (All sheet tables synchronized).`,
         sourceType: 'webapp'
       };
     }
@@ -830,6 +886,30 @@ app.delete('/api/enquiries/:id', checkAdminAuth, (req, res) => {
   }
   saveDatabase(db);
   res.json({ success: true, message: "Deleted successfully" });
+});
+
+// Clear all enquiries endpoint for admin (remove test enquiries)
+app.delete('/api/enquiries-all', checkAdminAuth, (req, res) => {
+  db.enquiries = [];
+  saveDatabase(db);
+  res.json({ success: true, message: "All enquiries cleared successfully." });
+});
+
+// 4b. Sheets Attached Datasets (PriceList, Notices, QuickLinks, Citizens)
+app.get('/api/pricelist', (req, res) => {
+  res.json({ success: true, priceList: db.priceList || INITIAL_PRICELIST });
+});
+
+app.get('/api/notices', (req, res) => {
+  res.json({ success: true, notices: db.notices || INITIAL_NOTICES });
+});
+
+app.get('/api/quicklinks', (req, res) => {
+  res.json({ success: true, quickLinks: db.quickLinks || INITIAL_QUICKLINKS });
+});
+
+app.get('/api/citizens', checkAdminAuth, (req, res) => {
+  res.json({ success: true, citizens: db.citizens || [] });
 });
 
 // 5. Authentication

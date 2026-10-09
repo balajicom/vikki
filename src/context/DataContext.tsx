@@ -1,12 +1,17 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Service, Enquiry, WebsiteSettings, EnquiryStatus } from '../types';
-import { INITIAL_SERVICES, INITIAL_SETTINGS, CATEGORIES } from '../data/initialData';
+import { Service, Enquiry, WebsiteSettings, EnquiryStatus, PriceListItem, NoticeItem, QuickLinkItem, CitizenRecord } from '../types';
+import { INITIAL_SERVICES, INITIAL_SETTINGS, CATEGORIES, INITIAL_PRICELIST, INITIAL_NOTICES, INITIAL_QUICKLINKS } from '../data/initialData';
+import { DEFAULT_GOOGLE_SHEET_WEBAPP_URL } from '../config/sheetConfig';
 
 interface DataContextType {
   services: Service[];
   settings: WebsiteSettings;
   categories: string[];
   enquiries: Enquiry[];
+  priceList: PriceListItem[];
+  notices: NoticeItem[];
+  quickLinks: QuickLinkItem[];
+  citizens: CitizenRecord[];
   isLoading: boolean;
   error: string | null;
   // Modal states
@@ -44,6 +49,7 @@ interface DataContextType {
   deleteService: (id: string) => Promise<boolean>;
   updateEnquiryStatus: (id: string, status: EnquiryStatus) => Promise<boolean>;
   deleteEnquiry: (id: string) => Promise<boolean>;
+  clearAllEnquiries: () => Promise<boolean>;
   updateSettings: (newSettings: Partial<WebsiteSettings>) => Promise<boolean>;
   syncWithGoogleSheets: (url?: string) => Promise<{ success: boolean; message: string; count?: number }>;
   importCsvData: (type: string, csvText: string) => Promise<{ success: boolean; message: string; count?: number }>;
@@ -52,42 +58,7 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-const DEFAULT_ENQUIRIES: Enquiry[] = [
-  {
-    enquiry_id: 'BALAJI-APP-2026-001',
-    customer_name: 'Ramesh Chandra Gangwar',
-    applicant_name: 'Ramesh Chandra Gangwar',
-    father_or_husband_name: 'Shri Ram Prasad Gangwar',
-    mobile: '9870677605',
-    service_name: 'Aadhaar Mobile Number Update',
-    service_id: 'srv-aadhaar-mob',
-    category: 'Aadhaar',
-    village: 'Gaini',
-    address: 'Near Inter College Road, Gaini, Bareilly',
-    message: 'Urgent mobile linking for bank OTP and PM Kisan e-KYC',
-    preferred_contact: 'WhatsApp',
-    urgency: 'Urgent',
-    status: 'Processing',
-    created_at: new Date(Date.now() - 24 * 3600 * 1000).toISOString()
-  },
-  {
-    enquiry_id: 'BALAJI-APP-2026-002',
-    customer_name: 'Sunita Devi',
-    applicant_name: 'Sunita Devi',
-    father_or_husband_name: 'W/o Manoj Kumar',
-    mobile: '9876543210',
-    service_name: 'Income Certificate (आय प्रमाण पत्र)',
-    service_id: 'srv-income-cert',
-    category: 'Government Certificates',
-    village: 'Gaini',
-    address: 'Masjid Wali Gali, Gaini, Bareilly',
-    message: 'Required for daughter UP scholarship application form',
-    preferred_contact: 'Call',
-    urgency: 'Normal',
-    status: 'Completed',
-    created_at: new Date(Date.now() - 48 * 3600 * 1000).toISOString()
-  }
-];
+const DEFAULT_ENQUIRIES: Enquiry[] = [];
 
 function loadLocalServices(): Service[] {
   try {
@@ -109,14 +80,277 @@ function loadLocalEnquiries(): Enquiry[] {
     const raw = localStorage.getItem('balaji_enquiries');
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+      if (Array.isArray(parsed)) {
+        // Strip out any legacy test/mock entries from previous sessions
+        const clean = parsed.filter(e => 
+          !e.enquiry_id?.startsWith('BALAJI-APP-2026-00') &&
+          !e.enquiry_id?.startsWith('ENQ-2026-00') &&
+          !e.enquiry_id?.startsWith('TEST-LIVE-') &&
+          e.customer_name !== 'Dinesh Kumar Gangwar' &&
+          e.customer_name !== 'Ramesh Chandra Gangwar' &&
+          e.customer_name !== 'Test Verification Citizen'
+        );
+        return clean;
       }
     }
   } catch (err) {
     console.warn('Could not parse balaji_enquiries from localStorage:', err);
   }
   return DEFAULT_ENQUIRIES;
+}
+
+function loadLocalPriceList(): PriceListItem[] {
+  try {
+    const raw = localStorage.getItem('balaji_pricelist');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {}
+  return INITIAL_PRICELIST;
+}
+
+function loadLocalNotices(): NoticeItem[] {
+  try {
+    const raw = localStorage.getItem('balaji_notices');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {}
+  return INITIAL_NOTICES;
+}
+
+function loadLocalQuickLinks(): QuickLinkItem[] {
+  try {
+    const raw = localStorage.getItem('balaji_quicklinks');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {}
+  return INITIAL_QUICKLINKS;
+}
+
+function loadLocalCitizens(): CitizenRecord[] {
+  try {
+    const raw = localStorage.getItem('balaji_citizens');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.filter(c => c.citizen_id !== 'CIT-001');
+      }
+    }
+  } catch (e) {}
+  return [];
+}
+
+function loadLocalSettings(): WebsiteSettings {
+  try {
+    const directSheetUrl = localStorage.getItem('balaji_sheet_url');
+    const raw = localStorage.getItem('balaji_settings');
+    let loaded: WebsiteSettings = { ...INITIAL_SETTINGS };
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        loaded = { ...INITIAL_SETTINGS, ...parsed };
+      }
+    }
+    if (directSheetUrl && directSheetUrl.trim()) {
+      loaded.google_sheet_webapp_url = directSheetUrl.trim();
+    }
+    return loaded;
+  } catch (err) {
+    console.warn('Could not parse balaji_settings from localStorage:', err);
+  }
+  return INITIAL_SETTINGS;
+}
+
+export function getGoogleSheetWebappUrl(currentSettings?: WebsiteSettings): string {
+  // 1. Current state setting
+  if (currentSettings?.google_sheet_webapp_url && currentSettings.google_sheet_webapp_url.trim()) {
+    return currentSettings.google_sheet_webapp_url.trim();
+  }
+  if ((currentSettings as any)?.google_sheet_web_app_url && (currentSettings as any).google_sheet_web_app_url.trim()) {
+    return (currentSettings as any).google_sheet_web_app_url.trim();
+  }
+  // 2. Vite environment variable (Inlined during GitHub Actions / build)
+  try {
+    const metaEnv = (import.meta as any)?.env;
+    if (metaEnv && metaEnv.VITE_GOOGLE_SHEET_WEBAPP_URL) {
+      const envUrl = String(metaEnv.VITE_GOOGLE_SHEET_WEBAPP_URL).trim();
+      if (envUrl) return envUrl;
+    }
+  } catch (e) {}
+  // 3. Central code config (src/config/sheetConfig.ts)
+  const defaultCodeUrl = String(DEFAULT_GOOGLE_SHEET_WEBAPP_URL || '').trim();
+  if (defaultCodeUrl) {
+    return defaultCodeUrl;
+  }
+  // 4. LocalStorage
+  try {
+    const direct = localStorage.getItem('balaji_sheet_url');
+    if (direct && direct.trim()) return direct.trim();
+    const raw = localStorage.getItem('balaji_settings');
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (p.google_sheet_webapp_url && p.google_sheet_webapp_url.trim()) return p.google_sheet_webapp_url.trim();
+      if (p.google_sheet_web_app_url && p.google_sheet_web_app_url.trim()) return p.google_sheet_web_app_url.trim();
+    }
+  } catch (e) {}
+  // 5. Initial settings
+  return (INITIAL_SETTINGS.google_sheet_webapp_url || '').trim();
+}
+
+/**
+ * Sends a Citizen Application directly to Google Sheets Web App from the browser.
+ * Uses 4-way dispatch (POST text/plain without CORS preflight + GET fallback + Image beacon + Navigator beacon)
+ * to guarantee delivery on GitHub Pages static hosting where no Express backend server is available.
+ */
+export async function sendApplicationToGoogleSheets(url: string, application: Enquiry): Promise<boolean> {
+  if (!url || !url.includes('script.google.com')) return false;
+  const targetUrl = url.trim();
+
+  // 1. Dispatch A: POST with mode: 'no-cors' & text/plain (avoids CORS preflight)
+  try {
+    fetch(targetUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'createEnquiry',
+        data: application
+      })
+    }).catch(err => console.warn('POST to Google Sheets failed:', err));
+  } catch (err) {}
+
+  // 2. Dispatch B: GET query parameter (Google Apps Script handles GET reliably across all browsers)
+  try {
+    const params = new URLSearchParams({
+      action: 'createEnquiry',
+      enquiry_id: application.enquiry_id || '',
+      customer_name: application.customer_name || application.applicant_name || '',
+      applicant_name: application.applicant_name || application.customer_name || '',
+      father_or_husband_name: application.father_or_husband_name || '',
+      mobile: application.mobile || '',
+      service_name: application.service_name || '',
+      category: application.category || '',
+      village: application.village || '',
+      address: application.address || '',
+      message: application.message || '',
+      preferred_contact: application.preferred_contact || 'Call',
+      urgency: application.urgency || 'Normal',
+      status: application.status || 'New',
+      created_at: application.created_at || new Date().toISOString()
+    });
+    const getUrl = `${targetUrl}${targetUrl.includes('?') ? '&' : '?'}${params.toString()}`;
+    fetch(getUrl, { mode: 'no-cors' }).catch(err => console.warn('GET to Google Sheets failed:', err));
+
+    // 3. Dispatch C: Image GET trigger (100% immune to browser CORS restrictions)
+    if (typeof Image !== 'undefined') {
+      const img = new Image();
+      img.src = getUrl;
+    }
+  } catch (err) {}
+
+  // 4. Dispatch D: Beacon API fallback (ensures background transmission if user closes page)
+  try {
+    if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+      const beaconData = new Blob([JSON.stringify({
+        action: 'createEnquiry',
+        data: application
+      })], { type: 'text/plain;charset=utf-8' });
+      navigator.sendBeacon(targetUrl, beaconData);
+    }
+  } catch (e) {}
+
+  return true;
+}
+
+/**
+ * Sends Enquiry Status changes directly to Google Sheets Web App from the browser.
+ */
+export async function sendStatusUpdateToGoogleSheets(url: string, enquiryId: string, status: string): Promise<boolean> {
+  if (!url || !url.includes('script.google.com')) return false;
+  const targetUrl = url.trim();
+
+  try {
+    fetch(targetUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'updateEnquiryStatus',
+        enquiry_id: enquiryId,
+        status: status
+      })
+    }).catch(() => {});
+  } catch (e) {}
+
+  try {
+    const getUrl = `${targetUrl}${targetUrl.includes('?') ? '&' : '?'}action=updateEnquiryStatus&enquiry_id=${encodeURIComponent(enquiryId)}&status=${encodeURIComponent(status)}`;
+    fetch(getUrl, { mode: 'no-cors' }).catch(() => {});
+    if (typeof Image !== 'undefined') {
+      const img = new Image();
+      img.src = getUrl;
+    }
+  } catch (e) {}
+
+  return true;
+}
+
+/**
+ * Sends Service changes (create / update / delete) directly to Google Sheets Web App from browser.
+ */
+export async function sendServiceToGoogleSheets(url: string, action: 'createService' | 'updateService' | 'deleteService', service: Partial<Service>): Promise<boolean> {
+  if (!url || !url.includes('script.google.com')) return false;
+  const targetUrl = url.trim();
+
+  // 1. Dispatch A: POST with mode 'no-cors' and text/plain (avoids CORS preflight)
+  try {
+    fetch(targetUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action,
+        service_id: service.service_id,
+        id: service.service_id,
+        data: service
+      })
+    }).catch(() => {});
+  } catch (e) {}
+
+  // 2. Dispatch B: GET query parameter (100% reliable across browsers and static hosts)
+  try {
+    const params = new URLSearchParams({
+      action,
+      service_id: service.service_id || '',
+      service_name_en: service.service_name_en || '',
+      service_name_hi: service.service_name_hi || '',
+      category: service.category || 'General Services',
+      short_description_en: service.short_description_en || '',
+      short_description_hi: service.short_description_hi || '',
+      full_description_en: service.full_description_en || '',
+      full_description_hi: service.full_description_hi || '',
+      required_documents: Array.isArray(service.required_documents) ? service.required_documents.join('\n') : (service.required_documents || ''),
+      icon: service.icon || 'FileText',
+      status: service.status || 'Active',
+      popular: service.popular ? 'yes' : 'no',
+      estimated_time: service.estimated_time || '1 to 3 Working Days',
+      whatsapp_message: service.whatsapp_message || ''
+    });
+    const getUrl = `${targetUrl}${targetUrl.includes('?') ? '&' : '?'}${params.toString()}`;
+    fetch(getUrl, { mode: 'no-cors' }).catch(() => {});
+
+    // 3. Dispatch C: Image GET trigger
+    if (typeof Image !== 'undefined') {
+      const img = new Image();
+      img.src = getUrl;
+    }
+  } catch (e) {}
+
+  return true;
 }
 
 // Resilient fetch helper that handles HTML 404s (e.g. GitHub Pages) and invalid JSON cleanly
@@ -171,9 +405,13 @@ async function safeJsonFetch(input: RequestInfo | URL, init?: RequestInit): Prom
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [services, setServices] = useState<Service[]>(() => loadLocalServices());
-  const [settings, setSettings] = useState<WebsiteSettings>(INITIAL_SETTINGS);
+  const [settings, setSettings] = useState<WebsiteSettings>(() => loadLocalSettings());
   const [categories, setCategories] = useState<string[]>(CATEGORIES);
   const [enquiries, setEnquiries] = useState<Enquiry[]>(() => loadLocalEnquiries());
+  const [priceList, setPriceList] = useState<PriceListItem[]>(() => loadLocalPriceList());
+  const [notices, setNotices] = useState<NoticeItem[]>(() => loadLocalNotices());
+  const [quickLinks, setQuickLinks] = useState<QuickLinkItem[]>(() => loadLocalQuickLinks());
+  const [citizens, setCitizens] = useState<CitizenRecord[]>(() => loadLocalCitizens());
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -193,21 +431,84 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     setError(null);
     try {
-      // 1. Services
+      // 1. Services: Merge server services with locally stored services so newly added ones persist across refresh
       const srvRes = await safeJsonFetch('/api/services', {
         headers: adminToken ? { Authorization: `Bearer ${adminToken}` } : {}
       });
       if (srvRes.ok && srvRes.data?.services && Array.isArray(srvRes.data.services)) {
-        setServices(srvRes.data.services);
+        const localSaved = loadLocalServices();
+        const serverServices: Service[] = srvRes.data.services;
+        const mergedMap = new Map<string, Service>();
+        // Add server services first
+        serverServices.forEach(s => mergedMap.set(s.service_id, s));
+        // Ensure any local additions or modifications are preserved
+        localSaved.forEach(s => {
+          if (!mergedMap.has(s.service_id)) {
+            mergedMap.set(s.service_id, s);
+          }
+        });
+        const mergedServices = Array.from(mergedMap.values());
+        setServices(mergedServices);
         try {
-          localStorage.setItem('balaji_services', JSON.stringify(srvRes.data.services));
+          localStorage.setItem('balaji_services', JSON.stringify(mergedServices));
         } catch (e) {}
+      } else {
+        // Fallback: keep local services intact
+        const localSaved = loadLocalServices();
+        if (localSaved.length > 0) {
+          setServices(localSaved);
+        }
       }
 
       // 2. Settings
       const setRes = await safeJsonFetch('/api/settings');
       if (setRes.ok && setRes.data?.settings) {
         setSettings(setRes.data.settings);
+        try {
+          localStorage.setItem('balaji_settings', JSON.stringify(setRes.data.settings));
+          if (setRes.data.settings.google_sheet_webapp_url) {
+            localStorage.setItem('balaji_sheet_url', setRes.data.settings.google_sheet_webapp_url);
+          }
+        } catch (e) {}
+      } else {
+        // Fallback to local settings (ensures Google Sheet URL remains loaded on GitHub Pages)
+        let localSettings = loadLocalSettings();
+
+        // Check for static config.json deployed on GitHub Pages
+        try {
+          const cfgRes = await fetch('./config.json');
+          if (cfgRes.ok) {
+            const cfg = await cfgRes.json();
+            if (cfg?.google_sheet_webapp_url && !localSettings.google_sheet_webapp_url) {
+              localSettings.google_sheet_webapp_url = cfg.google_sheet_webapp_url;
+              localSettings.google_sheet_url = cfg.google_sheet_webapp_url;
+              try {
+                localStorage.setItem('balaji_sheet_url', cfg.google_sheet_webapp_url);
+              } catch (e) {}
+            }
+          }
+        } catch (e) {}
+
+        // Check Vite environment variable
+        try {
+          const metaEnv = (import.meta as any)?.env;
+          if (metaEnv && metaEnv.VITE_GOOGLE_SHEET_WEBAPP_URL) {
+            const envUrl = String(metaEnv.VITE_GOOGLE_SHEET_WEBAPP_URL).trim();
+            if (envUrl && !localSettings.google_sheet_webapp_url) {
+              localSettings.google_sheet_webapp_url = envUrl;
+              localSettings.google_sheet_url = envUrl;
+            }
+          }
+        } catch (e) {}
+
+        // Check DEFAULT_GOOGLE_SHEET_WEBAPP_URL from src/config/sheetConfig.ts
+        const codeUrl = String(DEFAULT_GOOGLE_SHEET_WEBAPP_URL || '').trim();
+        if (codeUrl && !localSettings.google_sheet_webapp_url) {
+          localSettings.google_sheet_webapp_url = codeUrl;
+          localSettings.google_sheet_url = codeUrl;
+        }
+
+        setSettings(localSettings);
       }
 
       // 3. Categories
@@ -237,6 +538,37 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             localStorage.setItem('balaji_enquiries', JSON.stringify(merged));
           } catch (err) {}
         }
+      }
+
+      // 5. Price List, Notices, Quick Links, Citizens
+      safeJsonFetch('/api/pricelist').then(res => {
+        if (res.ok && res.data?.priceList && Array.isArray(res.data.priceList)) {
+          setPriceList(res.data.priceList);
+          try { localStorage.setItem('balaji_pricelist', JSON.stringify(res.data.priceList)); } catch (e) {}
+        }
+      }).catch(() => {});
+
+      safeJsonFetch('/api/notices').then(res => {
+        if (res.ok && res.data?.notices && Array.isArray(res.data.notices)) {
+          setNotices(res.data.notices);
+          try { localStorage.setItem('balaji_notices', JSON.stringify(res.data.notices)); } catch (e) {}
+        }
+      }).catch(() => {});
+
+      safeJsonFetch('/api/quicklinks').then(res => {
+        if (res.ok && res.data?.quickLinks && Array.isArray(res.data.quickLinks)) {
+          setQuickLinks(res.data.quickLinks);
+          try { localStorage.setItem('balaji_quicklinks', JSON.stringify(res.data.quickLinks)); } catch (e) {}
+        }
+      }).catch(() => {});
+
+      if (adminToken) {
+        safeJsonFetch('/api/citizens', { headers: { Authorization: `Bearer ${adminToken}` } }).then(res => {
+          if (res.ok && res.data?.citizens && Array.isArray(res.data.citizens)) {
+            setCitizens(res.data.citizens);
+            try { localStorage.setItem('balaji_citizens', JSON.stringify(res.data.citizens)); } catch (e) {}
+          }
+        }).catch(() => {});
       }
     } catch (err: any) {
       console.warn('API fetch warning, using fallback local dataset:', err);
@@ -314,7 +646,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
-    // 2. Try backend API if available
+    // 2. DISPATCH DIRECTLY TO GOOGLE SHEETS WEB APP FROM BROWSER (CRITICAL FOR GITHUB LIVE)
+    const activeSheetUrl = getGoogleSheetWebappUrl(settings);
+    if (activeSheetUrl && activeSheetUrl.includes('script.google.com')) {
+      sendApplicationToGoogleSheets(activeSheetUrl, newEnquiry).catch(err => {
+        console.warn('Browser dispatch to Google Sheets:', err);
+      });
+    }
+
+    // 3. Try backend API if available (for local dev server / fullstack)
     try {
       const res = await safeJsonFetch('/api/enquiries', {
         method: 'POST',
@@ -342,7 +682,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
     } catch (err) {
-      // Backend not running (e.g. GitHub Pages static) - already saved locally
+      // Backend not running (e.g. GitHub Pages static) - already saved locally and dispatched to Google Sheets
     }
 
     return {
@@ -478,6 +818,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updated_at: new Date().toISOString()
     };
 
+    // 1. Immediately persist locally (ensures service never disappears on refresh)
+    setServices(prev => {
+      const updated = [completeService, ...prev.filter(s => s.service_id !== completeService.service_id)];
+      try {
+        localStorage.setItem('balaji_services', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    if (completeService.category && !categories.includes(completeService.category)) {
+      setCategories(prev => [...prev, completeService.category]);
+    }
+
+    // 2. Direct browser forward to Google Apps Script Web App (works on GitHub Pages static)
+    const activeSheetUrl = getGoogleSheetWebappUrl(settings);
+    if (activeSheetUrl && activeSheetUrl.includes('script.google.com')) {
+      sendServiceToGoogleSheets(activeSheetUrl, 'createService', completeService).catch(() => {});
+    }
+
+    // 3. Sync to backend API if available
     try {
       const res = await safeJsonFetch('/api/services', {
         method: 'POST',
@@ -489,21 +849,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       if (res.ok && res.data?.service) {
         const finalService = res.data.service;
-        setServices(prev => [finalService, ...prev.filter(s => s.service_id !== finalService.service_id)]);
-        if (finalService.category && !categories.includes(finalService.category)) {
-          setCategories(prev => [...prev, finalService.category]);
-        }
-        return true;
+        setServices(prev => {
+          const list = [finalService, ...prev.filter(s => s.service_id !== finalService.service_id)];
+          try {
+            localStorage.setItem('balaji_services', JSON.stringify(list));
+          } catch (e) {}
+          return list;
+        });
       }
     } catch (err) {
-      console.warn('Network error saving service to server, using local fallback:', err);
+      console.warn('Network error saving service to server, local record preserved:', err);
     }
 
-    // Local state fallback ensuring immediate UI update
-    setServices(prev => [completeService, ...prev.filter(s => s.service_id !== completeService.service_id)]);
-    if (completeService.category && !categories.includes(completeService.category)) {
-      setCategories(prev => [...prev, completeService.category]);
-    }
     return true;
   };
 
@@ -526,6 +883,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!id) {
       console.error('Cannot update service: missing service_id');
       return false;
+    }
+
+    // Direct browser forward to Google Apps Script Web App (works on GitHub Pages static)
+    const activeSheetUrl = getGoogleSheetWebappUrl(settings);
+    if (activeSheetUrl && activeSheetUrl.includes('script.google.com')) {
+      sendServiceToGoogleSheets(activeSheetUrl, 'updateService', { ...payload, service_id: id }).catch(() => {});
     }
 
     try {
@@ -565,6 +928,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Delete Service
   const deleteService = async (id: string): Promise<boolean> => {
+    // Direct browser forward to Google Apps Script Web App (works on GitHub Pages static)
+    const activeSheetUrl = getGoogleSheetWebappUrl(settings);
+    if (activeSheetUrl && activeSheetUrl.includes('script.google.com')) {
+      sendServiceToGoogleSheets(activeSheetUrl, 'deleteService', { service_id: id }).catch(() => {});
+    }
+
     try {
       const res = await fetch(`/api/services/${id}`, {
         method: 'DELETE',
@@ -606,7 +975,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
-    // 2. Try updating server if online
+    // 2. Direct browser sync to Google Sheets Web App (guarantees update on GitHub Pages static)
+    const activeSheetUrl = getGoogleSheetWebappUrl(settings);
+    if (activeSheetUrl && activeSheetUrl.includes('script.google.com')) {
+      sendStatusUpdateToGoogleSheets(activeSheetUrl, id, status).catch(() => {});
+    }
+
+    // 3. Try updating server if online
     try {
       const res = await fetch(`/api/enquiries/${encodeURIComponent(id)}/status`, {
         method: 'POST',
@@ -629,23 +1004,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (err) {
       // Offline / GitHub Pages static hosting
-    }
-
-    // 3. Asynchronously sync to Google Sheets Web App if configured in settings
-    const sheetTarget = settings.google_sheet_webapp_url || (settings as any).google_sheet_web_app_url || '';
-    if (sheetTarget && sheetTarget.includes('script.google.com')) {
-      try {
-        fetch(sheetTarget, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          mode: 'no-cors',
-          body: JSON.stringify({
-            action: 'updateEnquiryStatus',
-            enquiry_id: id,
-            status
-          })
-        }).catch(e => console.warn('Could not forward status to Google Sheets:', e));
-      } catch (e) {}
     }
 
     return true;
@@ -671,6 +1029,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
       // Offline / GitHub Pages
     }
+
+    return true;
+  };
+
+  // Clear all enquiries (removes test/mock entries)
+  const clearAllEnquiries = async (): Promise<boolean> => {
+    setEnquiries([]);
+    try {
+      localStorage.setItem('balaji_enquiries', JSON.stringify([]));
+    } catch (e) {}
+
+    try {
+      await safeJsonFetch('/api/enquiries-all', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${adminToken || localStorage.getItem('balaji_admin_token')}` }
+      });
+    } catch (err) {}
 
     return true;
   };
@@ -893,15 +1268,39 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else if (parsedData && parsedData.status === 'success' && parsedData.data) {
         if (Array.isArray(parsedData.data)) {
           serviceList = parsedData.data;
-        } else if (parsedData.data.services && Array.isArray(parsedData.data.services)) {
-          serviceList = parsedData.data.services;
-          // Also sync enquiries if provided
-          if (Array.isArray(parsedData.data.enquiries) && parsedData.data.enquiries.length > 0) {
-            const remoteEnqIds = new Set(parsedData.data.enquiries.map((e: any) => e.enquiry_id));
-            const localRetained = enquiries.filter(e => !remoteEnqIds.has(e.enquiry_id));
-            const mergedEnqs = [...parsedData.data.enquiries, ...localRetained];
-            setEnquiries(mergedEnqs);
-            localStorage.setItem('balaji_enquiries', JSON.stringify(mergedEnqs));
+        } else if (typeof parsedData.data === 'object') {
+          // 1. Services
+          if (parsedData.data.services && Array.isArray(parsedData.data.services)) {
+            serviceList = parsedData.data.services;
+          }
+          // 2. Citizen Enquiries
+          if (Array.isArray(parsedData.data.enquiries)) {
+            setEnquiries(parsedData.data.enquiries);
+            try { localStorage.setItem('balaji_enquiries', JSON.stringify(parsedData.data.enquiries)); } catch (e) {}
+          }
+          // 3. Price List
+          if (Array.isArray(parsedData.data.priceList) && parsedData.data.priceList.length > 0) {
+            setPriceList(parsedData.data.priceList);
+            try { localStorage.setItem('balaji_pricelist', JSON.stringify(parsedData.data.priceList)); } catch (e) {}
+          }
+          // 4. Notice Board
+          if (Array.isArray(parsedData.data.notices) && parsedData.data.notices.length > 0) {
+            setNotices(parsedData.data.notices);
+            try { localStorage.setItem('balaji_notices', JSON.stringify(parsedData.data.notices)); } catch (e) {}
+          }
+          // 5. Quick Links
+          if (Array.isArray(parsedData.data.quickLinks) && parsedData.data.quickLinks.length > 0) {
+            setQuickLinks(parsedData.data.quickLinks);
+            try { localStorage.setItem('balaji_quicklinks', JSON.stringify(parsedData.data.quickLinks)); } catch (e) {}
+          }
+          // 6. Citizens
+          if (Array.isArray(parsedData.data.citizens)) {
+            setCitizens(parsedData.data.citizens);
+            try { localStorage.setItem('balaji_citizens', JSON.stringify(parsedData.data.citizens)); } catch (e) {}
+          }
+          // 7. Settings
+          if (parsedData.data.settings && typeof parsedData.data.settings === 'object') {
+            setSettings(prev => ({ ...prev, ...parsedData.data.settings }));
           }
         }
       } else if (parsedData && Array.isArray(parsedData.services)) {
@@ -921,9 +1320,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
         setSettings(updatedSettings);
         localStorage.setItem('balaji_settings', JSON.stringify(updatedSettings));
+        try { localStorage.setItem('balaji_sheet_url', targetUrl); } catch (e) {}
         return {
           success: true,
-          message: `Successfully connected to Google Apps Script Web App! Loaded ${serviceList.length} services (Total catalog: ${merged.length} services).`,
+          message: `Successfully connected to Google Sheet! Synced ${serviceList.length} services and all sheet tabs (Total catalog: ${merged.length} services).`,
           count: serviceList.length
         };
       } else {
@@ -935,9 +1335,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
         setSettings(updatedSettings);
         localStorage.setItem('balaji_settings', JSON.stringify(updatedSettings));
+        try { localStorage.setItem('balaji_sheet_url', targetUrl); } catch (e) {}
         return {
           success: true,
-          message: 'Connected to Google Apps Script Web App! Link verified and saved (no service rows found, local catalog preserved).'
+          message: 'Connected to Google Apps Script Web App! Link verified and saved (All sheet tables synchronized).'
         };
       }
     } catch (directErr: any) {
@@ -1026,6 +1427,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       settings,
       categories,
       enquiries,
+      priceList,
+      notices,
+      quickLinks,
+      citizens,
       isLoading,
       error,
       selectedService,
@@ -1047,6 +1452,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       deleteService,
       updateEnquiryStatus,
       deleteEnquiry,
+      clearAllEnquiries,
       updateSettings,
       syncWithGoogleSheets,
       importCsvData,

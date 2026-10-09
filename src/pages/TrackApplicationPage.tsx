@@ -239,30 +239,10 @@ export const TrackApplicationPage: React.FC = () => {
               </button>
             </div>
 
-            {/* Quick Test Samples */}
+            {/* Helpful tip */}
             <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500 pt-1">
-              <span className="font-semibold text-slate-600">{language === 'hi' ? 'त्वरित जांचें:' : 'Quick check:'}</span>
-              <button
-                type="button"
-                onClick={() => { setQuery('9870677605'); runSearch('9870677605'); }}
-                className="px-2 py-0.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-md font-mono border border-blue-200 transition-colors"
-              >
-                9870677605
-              </button>
-              <button
-                type="button"
-                onClick={() => { setQuery('BALAJI-APP-2026-001'); runSearch('BALAJI-APP-2026-001'); }}
-                className="px-2 py-0.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-md font-mono border border-slate-200 transition-colors"
-              >
-                BALAJI-APP-2026-001
-              </button>
-              <button
-                type="button"
-                onClick={() => { setQuery('Sunita Devi'); runSearch('Sunita Devi'); }}
-                className="px-2 py-0.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-md border border-slate-200 transition-colors"
-              >
-                Sunita Devi
-              </button>
+              <span className="font-semibold text-slate-600">{language === 'hi' ? 'सुझाव:' : 'Tip:'}</span>
+              <span>{language === 'hi' ? 'अपना 10 अंकों का मोबाइल नंबर या आवेदन संदर्भ आईडी दर्ज करें' : 'Enter your registered 10-digit mobile number or Application Ref ID'}</span>
             </div>
           </form>
 

@@ -35,9 +35,12 @@ import {
   Users,
   Heart,
   Smartphone,
+  Tag,
+  Bell,
+  Globe,
   X
 } from 'lucide-react';
-import { useData } from '../../context/DataContext';
+import { useData, sendApplicationToGoogleSheets } from '../../context/DataContext';
 import { Service, Enquiry, SiteSettings, SheetTemplateInfo } from '../../types';
 import { getServiceIcon } from '../../utils/iconHelper';
 import { GOOGLE_APPS_SCRIPT_CODE } from '../../data/googleAppsScriptCode';
@@ -51,6 +54,11 @@ export const AdminDashboard: React.FC = () => {
     enquiries,
     settings,
     categories,
+    priceList,
+    notices,
+    quickLinks,
+    citizens,
+    clearAllEnquiries,
     addService,
     createService,
     updateService,
@@ -65,7 +73,7 @@ export const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<'services' | 'enquiries' | 'settings' | 'sheets'>('services');
+  const [activeTab, setActiveTab] = useState<'services' | 'enquiries' | 'pricelist' | 'notices' | 'quicklinks' | 'citizens' | 'settings' | 'sheets'>('services');
 
   // Service Edit / Create Modal State
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
@@ -97,10 +105,15 @@ export const AdminDashboard: React.FC = () => {
   const [settingsSavedMsg, setSettingsSavedMsg] = useState(false);
 
   // Google Sheets Tab State
-  const [sheetsUrlInput, setSheetsUrlInput] = useState(settings.google_sheet_web_app_url || '');
+  const [sheetsUrlInput, setSheetsUrlInput] = useState(
+    settings.google_sheet_webapp_url || settings.google_sheet_web_app_url || settings.google_sheet_url || localStorage.getItem('balaji_sheet_url') || ''
+  );
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [isTestingSubmission, setIsTestingSubmission] = useState(false);
+  const [testSubmissionResult, setTestSubmissionResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [copiedEnv, setCopiedEnv] = useState(false);
 
   // Google Sheet & CSV Templates State
   const [selectedTemplateForPreview, setSelectedTemplateForPreview] = useState<SheetTemplateInfo | null>(null);
@@ -114,6 +127,15 @@ export const AdminDashboard: React.FC = () => {
   const [enquiryFilterStatus, setEnquiryFilterStatus] = useState<string>('All');
   const [serviceSearchTerm, setServiceSearchTerm] = useState('');
   const [selectedEnquiryForDetails, setSelectedEnquiryForDetails] = useState<Enquiry | null>(null);
+  const [enquiryToDelete, setEnquiryToDelete] = useState<Enquiry | null>(null);
+  const [isClearEnquiriesModalOpen, setIsClearEnquiriesModalOpen] = useState(false);
+  const [isClearingEnquiries, setIsClearingEnquiries] = useState(false);
+
+  // Filters for Attached Sheet Tabs
+  const [priceSearchTerm, setPriceSearchTerm] = useState('');
+  const [priceCategoryFilter, setPriceCategoryFilter] = useState('All');
+  const [quickLinkSearchTerm, setQuickLinkSearchTerm] = useState('');
+  const [citizenSearchTerm, setCitizenSearchTerm] = useState('');
 
   // Protect Admin route
   React.useEffect(() => {
@@ -124,7 +146,10 @@ export const AdminDashboard: React.FC = () => {
 
   React.useEffect(() => {
     setSettingsForm(settings);
-    setSheetsUrlInput(settings.google_sheet_web_app_url || '');
+    const activeUrl = settings.google_sheet_webapp_url || settings.google_sheet_web_app_url || settings.google_sheet_url || localStorage.getItem('balaji_sheet_url') || '';
+    if (activeUrl) {
+      setSheetsUrlInput(activeUrl);
+    }
   }, [settings]);
 
   // Metrics Calculations
@@ -264,9 +289,94 @@ export const AdminDashboard: React.FC = () => {
   const handleSyncSheets = async () => {
     setIsSyncing(true);
     setSyncStatusMsg(null);
-    const res = await syncWithGoogleSheets(sheetsUrlInput.trim());
+    setTestSubmissionResult(null);
+    const trimmed = sheetsUrlInput.trim();
+    if (trimmed) {
+      // Save to settings permanently
+      await updateSettings({
+        google_sheet_webapp_url: trimmed,
+        google_sheet_url: trimmed
+      });
+      try {
+        localStorage.setItem('balaji_sheet_url', trimmed);
+      } catch (e) {}
+    }
+    const res = await syncWithGoogleSheets(trimmed);
     setIsSyncing(false);
     setSyncStatusMsg(res.message);
+  };
+
+  // Test direct dispatch to Google Sheets table from the browser (verifies live delivery)
+  const handleTestDirectSubmission = async () => {
+    const targetUrl = sheetsUrlInput.trim();
+    if (!targetUrl || !targetUrl.includes('script.google.com')) {
+      setTestSubmissionResult({
+        success: false,
+        message: 'Please paste a valid Google Apps Script Web App URL (ending with /exec) before testing live delivery.'
+      });
+      return;
+    }
+
+    setIsTestingSubmission(true);
+    setTestSubmissionResult(null);
+
+    const testId = `TEST-LIVE-${Date.now().toString(36).toUpperCase()}`;
+    const testEnquiry: Enquiry = {
+      enquiry_id: testId,
+      customer_name: 'Test Verification Citizen',
+      applicant_name: 'Test Verification Citizen',
+      father_or_husband_name: 'Shri Balaji Test',
+      mobile: '9870677605',
+      service_id: 'srv-test',
+      service_name: 'GitHub Live Table Verification Test',
+      category: 'System Test',
+      village: 'Gaini',
+      address: 'Masjid Bali Gali, Inter College Road Gaini, Bareilly',
+      message: 'Direct verification test sent from Balaji Admin Dashboard to confirm that applications go into the Google Sheet "Enquiries" table on GitHub Live.',
+      preferred_contact: 'WhatsApp',
+      urgency: 'Normal',
+      status: 'New',
+      created_at: new Date().toISOString()
+    };
+
+    try {
+      await sendApplicationToGoogleSheets(targetUrl, testEnquiry);
+      setTestSubmissionResult({
+        success: true,
+        message: `Direct dispatch initiated (Ref ID: ${testId})! Open your Google Sheet and check the "Enquiries" tab — you should see this test row appear immediately.`
+      });
+    } catch (err: any) {
+      setTestSubmissionResult({
+        success: false,
+        message: `Failed sending test record: ${err?.message || 'Network error'}`
+      });
+    } finally {
+      setIsTestingSubmission(false);
+    }
+  };
+
+  // Download config.json for GitHub Pages deployment
+  const handleDownloadConfigJson = () => {
+    const configData = {
+      google_sheet_webapp_url: sheetsUrlInput.trim(),
+      last_updated: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(configData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'config.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopyEnvConfig = () => {
+    const envLine = `VITE_GOOGLE_SHEET_WEBAPP_URL="${sheetsUrlInput.trim()}"`;
+    navigator.clipboard.writeText(envLine);
+    setCopiedEnv(true);
+    setTimeout(() => setCopiedEnv(false), 2500);
   };
 
   // Copy Google Apps Script code
@@ -443,60 +553,116 @@ export const AdminDashboard: React.FC = () => {
             type="button"
             id="tab-services"
             onClick={() => setActiveTab('services')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
               activeTab === 'services'
                 ? 'bg-blue-700 text-white shadow-xs'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
             <Layers className="w-4 h-4" />
-            <span>Services Directory ({totalServices})</span>
+            <span>Services ({totalServices})</span>
           </button>
 
           <button
             type="button"
             id="tab-enquiries"
             onClick={() => setActiveTab('enquiries')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
               activeTab === 'enquiries'
                 ? 'bg-blue-700 text-white shadow-xs'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
             <Inbox className="w-4 h-4" />
-            <span>Citizen Enquiries ({pendingEnquiries} pending)</span>
+            <span>Citizen Enquiries ({enquiries.length})</span>
+          </button>
+
+          <button
+            type="button"
+            id="tab-pricelist"
+            onClick={() => setActiveTab('pricelist')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
+              activeTab === 'pricelist'
+                ? 'bg-blue-700 text-white shadow-xs'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Tag className="w-4 h-4" />
+            <span>Rate List & Fees ({priceList?.length || 0})</span>
+          </button>
+
+          <button
+            type="button"
+            id="tab-notices"
+            onClick={() => setActiveTab('notices')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
+              activeTab === 'notices'
+                ? 'bg-blue-700 text-white shadow-xs'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Bell className="w-4 h-4" />
+            <span>Notice Board ({notices?.length || 0})</span>
+          </button>
+
+          <button
+            type="button"
+            id="tab-quicklinks"
+            onClick={() => setActiveTab('quicklinks')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
+              activeTab === 'quicklinks'
+                ? 'bg-blue-700 text-white shadow-xs'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Globe className="w-4 h-4" />
+            <span>Govt Portals ({quickLinks?.length || 0})</span>
+          </button>
+
+          <button
+            type="button"
+            id="tab-citizens"
+            onClick={() => setActiveTab('citizens')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
+              activeTab === 'citizens'
+                ? 'bg-blue-700 text-white shadow-xs'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Citizens Registry ({citizens?.length || 0})</span>
           </button>
 
           <button
             type="button"
             id="tab-settings"
             onClick={() => setActiveTab('settings')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
               activeTab === 'settings'
                 ? 'bg-blue-700 text-white shadow-xs'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
             <SettingsIcon className="w-4 h-4" />
-            <span>Center & Website Settings</span>
+            <span>Center Settings</span>
           </button>
 
           <button
             type="button"
             id="tab-sheets"
             onClick={() => setActiveTab('sheets')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
               activeTab === 'sheets'
                 ? 'bg-emerald-700 text-white shadow-xs'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
             <FileSpreadsheet className="w-4 h-4" />
-            <span>Google Sheets & Templates (6)</span>
+            <span>Google Sheets & Sync</span>
             <span className={`px-1.5 py-0.2 rounded text-[10px] font-extrabold uppercase ${
               activeTab === 'sheets' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
             }`}>
-              All Templates
+              All 7 Tabs
             </span>
           </button>
         </div>
@@ -649,8 +815,8 @@ export const AdminDashboard: React.FC = () => {
                 </p>
               </div>
 
-              {/* Status Filter */}
-              <div className="flex items-center gap-2">
+              {/* Status Filter & Actions */}
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs text-slate-500 font-bold">Filter Status:</span>
                 <select
                   value={enquiryFilterStatus}
@@ -664,6 +830,18 @@ export const AdminDashboard: React.FC = () => {
                   <option value="Completed">Completed</option>
                   <option value="Cancelled">Cancelled</option>
                 </select>
+
+                {enquiries.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setIsClearEnquiriesModalOpen(true)}
+                    className="px-2.5 py-1 text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                    title="Remove all test/sample enquiries to keep table clean"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Clear Enquiries</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -795,12 +973,8 @@ export const AdminDashboard: React.FC = () => {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => {
-                                  if (window.confirm(`Delete enquiry from ${enq.customer_name}?`)) {
-                                    deleteEnquiry(enq.enquiry_id);
-                                  }
-                                }}
-                                className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                                onClick={() => setEnquiryToDelete(enq)}
+                                className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
                                 title="Delete Enquiry"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -823,7 +997,507 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 3: SETTINGS MANAGEMENT */}
+        {/* TAB 3: PRICE LIST & FEE SCHEDULE */}
+        {activeTab === 'pricelist' && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase rounded-md bg-blue-100 text-blue-800">
+                    Live Sheet: PriceList
+                  </span>
+                  <span className="text-xs text-slate-500 font-medium">
+                    {priceList?.length || 0} Listed Services
+                  </span>
+                </div>
+                <h2 className="text-lg font-bold text-slate-900">
+                  Rate List & Government Fee Schedule
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Full fee transparency for citizens. Synced directly from your master Google Sheet (Tab: "PriceList").
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('sheets')}
+                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Sync from Google Sheet</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Search by service name, category, or notes..."
+                  value={priceSearchTerm}
+                  onChange={(e) => setPriceSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-600"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-bold shrink-0">Category:</span>
+                <select
+                  value={priceCategoryFilter}
+                  onChange={(e) => setPriceCategoryFilter(e.target.value)}
+                  className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none"
+                >
+                  <option value="All">All Categories</option>
+                  {Array.from(new Set((priceList || []).map(p => p.category).filter(Boolean))).map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Rates Table */}
+            <div className="overflow-x-auto border border-slate-200 rounded-xl">
+              <table className="w-full text-left text-xs text-slate-700">
+                <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[11px]">
+                  <tr>
+                    <th className="p-3.5">Rate ID & Service Name</th>
+                    <th className="p-3.5">Category</th>
+                    <th className="p-3.5">Govt Fee</th>
+                    <th className="p-3.5">Center Fee</th>
+                    <th className="p-3.5">Total Fee</th>
+                    <th className="p-3.5">Delivery Time</th>
+                    <th className="p-3.5">Notes / Citizen Guidelines</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {(() => {
+                    const filtered = (priceList || []).filter(item => {
+                      const matchesSearch = !priceSearchTerm ||
+                        item.service_name.toLowerCase().includes(priceSearchTerm.toLowerCase()) ||
+                        item.category.toLowerCase().includes(priceSearchTerm.toLowerCase()) ||
+                        (item.notes && item.notes.toLowerCase().includes(priceSearchTerm.toLowerCase()));
+                      const matchesCat = priceCategoryFilter === 'All' || item.category === priceCategoryFilter;
+                      return matchesSearch && matchesCat;
+                    });
+
+                    if (filtered.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan={7} className="text-center py-10 text-slate-500">
+                            <Tag className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                            <p className="font-semibold">No price list entries found.</p>
+                            <p className="text-[11px] text-slate-400 mt-1">
+                              Entries are synchronized from your Google Sheet "PriceList" tab.
+                            </p>
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return filtered.map((item) => (
+                      <tr key={item.price_id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="p-3.5 font-bold text-slate-900">
+                          <span className="font-mono text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 block w-fit mb-1">
+                            {item.price_id}
+                          </span>
+                          <div>{item.service_name}</div>
+                        </td>
+                        <td className="p-3.5">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                            {item.category}
+                          </span>
+                        </td>
+                        <td className="p-3.5 font-semibold text-slate-700">
+                          {item.government_fee}
+                        </td>
+                        <td className="p-3.5 font-semibold text-slate-700">
+                          {item.center_fee}
+                        </td>
+                        <td className="p-3.5">
+                          <span className="px-2.5 py-1 rounded-md text-xs font-black bg-emerald-50 text-emerald-800 border border-emerald-300">
+                            {item.total_fee}
+                          </span>
+                        </td>
+                        <td className="p-3.5 text-slate-600 font-medium">
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span>{item.estimated_delivery}</span>
+                          </div>
+                        </td>
+                        <td className="p-3.5 text-[11px] text-slate-500 max-w-xs">
+                          {item.notes || '—'}
+                        </td>
+                      </tr>
+                    ));
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: NOTICE BOARD */}
+        {activeTab === 'notices' && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase rounded-md bg-amber-100 text-amber-800">
+                    Live Sheet: NoticeBoard
+                  </span>
+                  <span className="text-xs text-slate-500 font-medium">
+                    {notices?.length || 0} Official Notices
+                  </span>
+                </div>
+                <h2 className="text-lg font-bold text-slate-900">
+                  Center Notice Board & Urgent Updates
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Citizen announcements, last dates, server maintenance, and government scheme deadlines from your Google Sheet.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('sheets')}
+                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Sync from Google Sheet</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Notices List */}
+            <div className="space-y-4">
+              {(!notices || notices.length === 0) ? (
+                <div className="text-center py-12 border border-dashed border-slate-200 rounded-xl">
+                  <Bell className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                  <p className="text-xs font-semibold text-slate-600">No notices currently published.</p>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Add notice rows to your master Google Sheet "NoticeBoard" tab and click Sync.
+                  </p>
+                </div>
+              ) : (
+                notices.map((notice) => (
+                  <div
+                    key={notice.notice_id}
+                    className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-colors space-y-2.5"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                          {notice.notice_id}
+                        </span>
+                        <span className={`px-2 py-0.5 text-[10px] font-extrabold uppercase rounded ${
+                          notice.priority === 'Urgent'
+                            ? 'bg-rose-100 text-rose-800'
+                            : notice.priority === 'High'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {notice.priority} Priority
+                        </span>
+                        <span className="px-2 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-600 rounded">
+                          {notice.category}
+                        </span>
+                      </div>
+                      <span className="text-xs font-semibold text-slate-500">
+                        🗓️ {notice.date}
+                      </span>
+                    </div>
+
+                    <h3 className="text-sm font-bold text-slate-900">
+                      {notice.title}
+                    </h3>
+
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      {notice.description}
+                    </p>
+
+                    {notice.action_url && (
+                      <div className="pt-1">
+                        <a
+                          href={notice.action_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-700 hover:text-blue-900 underline"
+                        >
+                          <span>Official Portal / Circular Link</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: QUICK LINKS & GOVT PORTALS */}
+        {activeTab === 'quicklinks' && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase rounded-md bg-emerald-100 text-emerald-800">
+                    Live Sheet: QuickLinks
+                  </span>
+                  <span className="text-xs text-slate-500 font-medium">
+                    {quickLinks?.length || 0} Portals Configured
+                  </span>
+                </div>
+                <h2 className="text-lg font-bold text-slate-900">
+                  Government Portals & Official Bookmarks
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Instant launchpad for official Jan Seva Kendra operations from your Google Sheet (Tab: "QuickLinks").
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('sheets')}
+                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Sync from Google Sheet</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Search */}
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="Search portals by title, portal name, or category..."
+                value={quickLinkSearchTerm}
+                onChange={(e) => setQuickLinkSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-600"
+              />
+            </div>
+
+            {/* Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {(() => {
+                const filtered = (quickLinks || []).filter(item =>
+                  !quickLinkSearchTerm ||
+                  item.title.toLowerCase().includes(quickLinkSearchTerm.toLowerCase()) ||
+                  item.portal_name.toLowerCase().includes(quickLinkSearchTerm.toLowerCase()) ||
+                  item.category.toLowerCase().includes(quickLinkSearchTerm.toLowerCase())
+                );
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="col-span-full text-center py-12 border border-dashed border-slate-200 rounded-xl">
+                      <Globe className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                      <p className="text-xs font-semibold text-slate-600">No portal links found.</p>
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        Add rows to the "QuickLinks" tab in your master Google Sheet and sync.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return filtered.map((link) => (
+                  <div
+                    key={link.link_id}
+                    className="p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-xs transition-all space-y-3 flex flex-col justify-between"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-blue-50 text-blue-700 border border-blue-200">
+                          {link.category}
+                        </span>
+                        <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-600">
+                          {link.login_type}
+                        </span>
+                      </div>
+
+                      <h4 className="text-sm font-bold text-slate-900">
+                        {link.title}
+                      </h4>
+
+                      <div className="text-xs font-semibold text-slate-600">
+                        🏛️ {link.portal_name}
+                      </div>
+
+                      <p className="text-[11px] text-slate-500 line-clamp-2">
+                        {link.description}
+                      </p>
+
+                      {link.required_credentials && (
+                        <div className="p-2 rounded bg-amber-50/70 border border-amber-200/70 text-[10px] text-amber-900">
+                          <strong>Required:</strong> {link.required_credentials}
+                        </div>
+                      )}
+                    </div>
+
+                    <a
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-1.5 w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-colors"
+                    >
+                      <span>Open Official Portal</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 6: CITIZENS REGISTRY */}
+        {activeTab === 'citizens' && (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase rounded-md bg-purple-100 text-purple-800">
+                    Live Sheet: Citizens
+                  </span>
+                  <span className="text-xs text-slate-500 font-medium">
+                    {citizens?.length || 0} Registered Citizens
+                  </span>
+                </div>
+                <h2 className="text-lg font-bold text-slate-900">
+                  Citizens & Beneficiaries Registry
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Local village customer database from your master Google Sheet (Tab: "Citizens").
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('sheets')}
+                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Sync from Google Sheet</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                placeholder="Search citizen by name, father name, mobile, or village..."
+                value={citizenSearchTerm}
+                onChange={(e) => setCitizenSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-600"
+              />
+            </div>
+
+            {/* Citizens Table */}
+            <div className="overflow-x-auto border border-slate-200 rounded-xl">
+              <table className="w-full text-left text-xs text-slate-700">
+                <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[11px]">
+                  <tr>
+                    <th className="p-3.5">Citizen ID & Name</th>
+                    <th className="p-3.5">Father / Husband</th>
+                    <th className="p-3.5">Mobile</th>
+                    <th className="p-3.5">Village / Ward</th>
+                    <th className="p-3.5">Aadhaar (Last 4)</th>
+                    <th className="p-3.5">Registered Date</th>
+                    <th className="p-3.5">Notes</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {(() => {
+                    const filtered = (citizens || []).filter(item =>
+                      !citizenSearchTerm ||
+                      item.full_name.toLowerCase().includes(citizenSearchTerm.toLowerCase()) ||
+                      (item.father_name && item.father_name.toLowerCase().includes(citizenSearchTerm.toLowerCase())) ||
+                      (item.mobile && item.mobile.includes(citizenSearchTerm)) ||
+                      (item.village && item.village.toLowerCase().includes(citizenSearchTerm.toLowerCase()))
+                    );
+
+                    if (filtered.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan={7} className="text-center py-10 text-slate-500">
+                            <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                            <p className="font-semibold">No citizen records found.</p>
+                            <p className="text-[11px] text-slate-400 mt-1">
+                              When citizens register or you add them in the "Citizens" sheet tab, they will appear here.
+                            </p>
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return filtered.map((c) => {
+                      const cleanMob = (c.mobile || '').replace(/\D/g, '');
+                      return (
+                        <tr key={c.citizen_id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="p-3.5 font-bold text-slate-900">
+                            <span className="font-mono text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 block w-fit mb-1">
+                              {c.citizen_id}
+                            </span>
+                            <div>{c.full_name}</div>
+                          </td>
+                          <td className="p-3.5 text-slate-600">
+                            {c.father_name || '—'}
+                          </td>
+                          <td className="p-3.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-semibold text-slate-800">{c.mobile}</span>
+                              {cleanMob && (
+                                <>
+                                  <a
+                                    href={`tel:${cleanMob}`}
+                                    className="p-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded"
+                                    title="Call Citizen"
+                                  >
+                                    <Phone className="w-3 h-3" />
+                                  </a>
+                                  <a
+                                    href={`https://wa.me/91${cleanMob}?text=${encodeURIComponent(`Hello ${c.full_name}, this is Balaji Communication Jan Seva Kendra.`)}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded"
+                                    title="WhatsApp Citizen"
+                                  >
+                                    <MessageCircle className="w-3 h-3 fill-emerald-600" />
+                                  </a>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-3.5 text-slate-600 font-medium">
+                            {c.village || '—'}
+                          </td>
+                          <td className="p-3.5 font-mono text-slate-700">
+                            {c.aadhaar_last4 ? `XXXX-XXXX-${c.aadhaar_last4}` : '—'}
+                          </td>
+                          <td className="p-3.5 text-slate-500">
+                            {c.created_at ? new Date(c.created_at).toLocaleDateString() : '—'}
+                          </td>
+                          <td className="p-3.5 text-[11px] text-slate-500 max-w-xs">
+                            {c.notes || '—'}
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
         {activeTab === 'settings' && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
@@ -1134,12 +1808,40 @@ export const AdminDashboard: React.FC = () => {
                   id="btn-sync-sheets"
                   onClick={handleSyncSheets}
                   disabled={isSyncing}
-                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors inline-flex items-center justify-center gap-2 shrink-0 disabled:opacity-60 cursor-pointer"
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors inline-flex items-center justify-center gap-2 shrink-0 disabled:opacity-60 cursor-pointer"
                 >
                   <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
                   <span>{isSyncing ? 'Connecting & Syncing...' : 'Fetch & Sync Now'}</span>
                 </button>
+                <button
+                  type="button"
+                  id="btn-test-sheet-write"
+                  onClick={handleTestDirectSubmission}
+                  disabled={isTestingSubmission || !sheetsUrlInput.trim()}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors inline-flex items-center justify-center gap-2 shrink-0 disabled:opacity-50 cursor-pointer"
+                  title="Sends a test enquiry row directly to your Google Sheet table to verify writes"
+                >
+                  <UploadCloud className={`w-4 h-4 ${isTestingSubmission ? 'animate-bounce' : ''}`} />
+                  <span>{isTestingSubmission ? 'Sending Test...' : '🧪 Test Live Delivery'}</span>
+                </button>
               </div>
+
+              {testSubmissionResult && (
+                <div className={`p-3.5 rounded-xl text-xs font-medium border flex items-start gap-2.5 ${
+                  testSubmissionResult.success
+                    ? 'bg-blue-50 border-blue-200 text-blue-900'
+                    : 'bg-rose-50 border-rose-200 text-rose-900'
+                }`}>
+                  {testSubmissionResult.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  )}
+                  <div className="space-y-1">
+                    <p className="font-bold">{testSubmissionResult.message}</p>
+                  </div>
+                </div>
+              )}
 
               {/* Real-time URL format validation & warnings */}
               {sheetsUrlInput.trim().length > 0 && (
@@ -1224,6 +1926,71 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* GitHub Pages Live Sync Integration Card */}
+              <div className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-800 space-y-3.5 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-sm shrink-0 border border-emerald-500/30">
+                      GH
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        <span>GitHub Pages Live Sync Integration</span>
+                        <span className="px-2 py-0.5 text-[10px] bg-emerald-500/20 text-emerald-300 font-semibold rounded-full border border-emerald-500/30">
+                          Active in Browser
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-slate-400 leading-snug">
+                        Local runs Node.js, while GitHub Pages is static. With our direct browser dispatch, submissions now forward straight into your Google Sheet on GitHub Live!
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleDownloadConfigJson}
+                      disabled={!sheetsUrlInput.trim()}
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
+                      title="Download config.json to place in public/ folder"
+                    >
+                      <Download className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Download config.json</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCopyEnvConfig}
+                      disabled={!sheetsUrlInput.trim()}
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
+                      title="Copy VITE_GOOGLE_SHEET_WEBAPP_URL variable"
+                    >
+                      {copiedEnv ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
+                      <span>{copiedEnv ? 'Copied .env' : 'Copy .env Variable'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1 text-xs">
+                  <div className="bg-slate-800/70 p-3 rounded-xl border border-slate-700/60 space-y-1">
+                    <div className="font-semibold text-emerald-400 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Automatic Browser Dispatch (CORS-Bypass)</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      Citizen applications use <code>text/plain</code> simple POST, URL query parameters, and image beacons, ensuring delivery without preflight OPTIONS CORS blocks.
+                    </p>
+                  </div>
+                  <div className="bg-slate-800/70 p-3 rounded-xl border border-slate-700/60 space-y-1">
+                    <div className="font-semibold text-blue-400 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                      <span>How to Deploy to GitHub</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      Whenever you sync or save in this Admin panel, your URL is automatically saved to <code>public/config.json</code>. Commit this file and push to GitHub so your live site connects automatically.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Template Directory Header & Filter Pills */}
@@ -1733,6 +2500,89 @@ export const AdminDashboard: React.FC = () => {
                 className="flex-1 px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-xs transition-colors"
               >
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ENQUIRY DELETE CONFIRMATION DIALOG (Safe alternative to window.confirm) */}
+      {enquiryToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl border border-slate-200">
+            <div className="w-12 h-12 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-bold text-slate-900">Delete Enquiry</h3>
+              <p className="text-xs text-slate-500">
+                Are you sure you want to remove enquiry <strong>{enquiryToDelete.enquiry_id}</strong> from <strong>"{enquiryToDelete.customer_name || enquiryToDelete.applicant_name}"</strong>?
+              </p>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setEnquiryToDelete(null)}
+                className="flex-1 px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const id = enquiryToDelete.enquiry_id;
+                  setEnquiryToDelete(null);
+                  await deleteEnquiry(id);
+                  setServiceSuccessToast(`Enquiry ${id} deleted.`);
+                  setTimeout(() => setServiceSuccessToast(null), 3000);
+                }}
+                className="flex-1 px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-xs transition-colors cursor-pointer"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CLEAR ALL ENQUIRIES CONFIRMATION DIALOG */}
+      {isClearEnquiriesModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl border border-slate-200">
+            <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-bold text-slate-900">Clear All Enquiries</h3>
+              <p className="text-xs text-slate-500">
+                This will remove all {enquiries.length} current enquiries / test entries from the database. Live submissions sent to your Google Sheet will remain safe in the spreadsheet.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsClearEnquiriesModalOpen(false)}
+                className="flex-1 px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isClearingEnquiries}
+                onClick={async () => {
+                  setIsClearingEnquiries(true);
+                  try {
+                    await clearAllEnquiries();
+                    setIsClearEnquiriesModalOpen(false);
+                    setServiceSuccessToast('All enquiries cleared successfully.');
+                    setTimeout(() => setServiceSuccessToast(null), 3000);
+                  } finally {
+                    setIsClearingEnquiries(false);
+                  }
+                }}
+                className="flex-1 px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {isClearingEnquiries ? 'Clearing...' : 'Clear All'}
               </button>
             </div>
           </div>

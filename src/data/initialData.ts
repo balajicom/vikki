@@ -1,4 +1,4 @@
-import { Service, WebsiteSettings, Enquiry } from '../types';
+import { Service, WebsiteSettings, Enquiry, PriceListItem, NoticeItem, QuickLinkItem } from '../types';
 
 export const INITIAL_SETTINGS: WebsiteSettings = {
   business_name_en: "Balaji Communication",
@@ -397,95 +397,191 @@ export const CATEGORIES = [
   "Other Digital Services"
 ];
 
-export const INITIAL_ENQUIRIES: Enquiry[] = [
+export const INITIAL_ENQUIRIES: Enquiry[] = [];
+
+export const INITIAL_PRICELIST: PriceListItem[] = [
   {
-    enquiry_id: 'BALAJI-APP-2026-001',
-    customer_name: 'Dinesh Kumar Gangwar',
-    applicant_name: 'Dinesh Kumar Gangwar',
-    father_or_husband_name: 'Shri Ram Prasad Gangwar',
-    mobile: '9870677605',
+    price_id: 'PRC-001',
     service_name: 'Aadhaar Mobile Number Update',
-    service_id: 'srv-aadhaar-mob',
-    category: 'Aadhaar',
-    village: 'Gaini',
-    address: 'Near Inter College Road, Gaini, Bareilly',
-    message: 'Urgent mobile linking for bank OTP and PM Kisan e-KYC',
-    preferred_contact: 'WhatsApp',
-    urgency: 'Urgent',
-    status: 'Processing',
-    created_at: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 6 * 3600 * 1000).toISOString()
+    category: 'Aadhaar Services',
+    government_fee: '₹50',
+    csc_service_fee: '₹30',
+    total_fee: '₹80',
+    processing_time: '24 to 48 Hours',
+    eligibility_or_note: 'UIDAI biometric update fee + Kendra verification assistance',
+    status: 'Active'
   },
   {
-    enquiry_id: 'BALAJI-APP-2026-002',
-    customer_name: 'Sunita Devi',
-    applicant_name: 'Sunita Devi',
-    father_or_husband_name: 'W/o Manoj Kumar',
-    mobile: '9876543210',
-    service_name: 'Income Certificate (आय प्रमाण पत्र)',
-    service_id: 'srv-income-cert',
-    category: 'Government Certificates',
-    village: 'Gaini',
-    address: 'Masjid Wali Gali, Gaini, Bareilly',
-    message: 'Required for daughter UP scholarship application form',
-    preferred_contact: 'Call',
-    urgency: 'Normal',
-    status: 'Completed',
-    created_at: new Date(Date.now() - 48 * 3600 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 12 * 3600 * 1000).toISOString()
+    price_id: 'PRC-002',
+    service_name: 'Income / Caste / Domicile Certificate',
+    category: 'Revenue & eDistrict UP',
+    government_fee: '₹15',
+    csc_service_fee: '₹35',
+    total_fee: '₹50',
+    processing_time: '7 to 10 Days',
+    eligibility_or_note: 'Official UP Govt treasury challan + online application & scanning',
+    status: 'Active'
   },
   {
-    enquiry_id: 'BALAJI-APP-2026-003',
-    customer_name: 'Rameshwar Dayal Gangwar',
-    applicant_name: 'Rameshwar Dayal Gangwar',
-    father_or_husband_name: 'Late Hetram Gangwar',
-    mobile: '9870123456',
-    service_name: 'PM Kisan Samman Nidhi e-KYC & Land Record Seeding',
-    service_id: 'srv-pmkisan-ekyc',
+    price_id: 'PRC-003',
+    service_name: 'New PAN Card (Physical Delivery to Home)',
+    category: 'NSDL / UTI Services',
+    government_fee: '₹107',
+    csc_service_fee: '₹93',
+    total_fee: '₹200',
+    processing_time: '10 to 15 Days',
+    eligibility_or_note: 'NSDL official fee + biometric e-KYC and Speed Post plastic card',
+    status: 'Active'
+  },
+  {
+    price_id: 'PRC-004',
+    service_name: 'Ayushman Bharat Golden Card Print',
+    category: 'Health Mission',
+    government_fee: '₹0 (Govt Free)',
+    csc_service_fee: '₹30',
+    total_fee: '₹30',
+    processing_time: 'Instant 5 Mins',
+    eligibility_or_note: 'Government subsidy is free; High-grade waterproof PVC print charge',
+    status: 'Active'
+  },
+  {
+    price_id: 'PRC-005',
+    service_name: 'PM Kisan Samman Nidhi e-KYC',
+    category: 'Agriculture Services',
+    government_fee: '₹0 (Govt Free)',
+    csc_service_fee: '₹20',
+    total_fee: '₹20',
+    processing_time: 'Instant Thumb Scan',
+    eligibility_or_note: 'Biometric thumb authentication machine and portal server charge',
+    status: 'Active'
+  },
+  {
+    price_id: 'PRC-006',
+    service_name: 'New Ration Card Application',
+    category: 'Food & Civil Supplies',
+    government_fee: '₹0 (Govt Free)',
+    csc_service_fee: '₹60',
+    total_fee: '₹60',
+    processing_time: '15 to 30 Days',
+    eligibility_or_note: 'Online FCS portal filing, unit registration and document upload',
+    status: 'Active'
+  },
+  {
+    price_id: 'PRC-007',
+    service_name: 'Voter ID New Registration / Correction',
+    category: 'Election Commission',
+    government_fee: '₹0 (Govt Free)',
+    csc_service_fee: '₹40',
+    total_fee: '₹40',
+    processing_time: '15 to 30 Days',
+    eligibility_or_note: 'Form 6 / Form 8 application filing with BLO follow-up guidance',
+    status: 'Active'
+  },
+  {
+    price_id: 'PRC-008',
+    service_name: 'PVC Smart Plastic Card Print (Aadhaar / Voter / PAN)',
+    category: 'Digital Print Services',
+    government_fee: '₹0',
+    csc_service_fee: '₹50',
+    total_fee: '₹50',
+    processing_time: 'Instant 5 Mins',
+    eligibility_or_note: 'High definition UV waterproof smart PVC plastic card printing',
+    status: 'Active'
+  }
+];
+
+export const INITIAL_NOTICES: NoticeItem[] = [
+  {
+    notice_id: 'NTC-001',
+    title_en: 'PM Kisan 19th Installment e-KYC Mandatory',
+    title_hi: 'पीएम किसान 19वीं किस्त हेतु बायोमेट्रिक ई-केवाईसी अनिवार्य',
+    description_en: 'Farmers who have not completed biometric or OTP e-KYC must visit Balaji Communication to avoid installment blockage.',
+    description_hi: 'जिन किसान भाइयों की ई-केवाईसी पूरी नहीं है, वे अपनी आगामी किस्त पाने के लिए तुरंत केंद्र पर आकर फिंगरप्रिंट से ई-केवाईसी कराएं।',
     category: 'PM Kisan',
-    village: 'Gaini',
-    address: 'Main Market Road, Gaini',
-    message: 'Installment stopped due to biometric e-KYC pending',
-    preferred_contact: 'Call',
-    urgency: 'Urgent',
-    status: 'Contacted',
-    created_at: new Date(Date.now() - 18 * 3600 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 4 * 3600 * 1000).toISOString()
+    badge_type: 'Urgent',
+    last_date: '31-03-2026',
+    action_link: '/services',
+    status: 'Active',
+    created_at: new Date().toISOString()
   },
   {
-    enquiry_id: 'BALAJI-APP-2026-004',
-    customer_name: 'Pooja Verma',
-    applicant_name: 'Pooja Verma',
-    father_or_husband_name: 'Shri Suresh Verma',
-    mobile: '9412345678',
-    service_name: 'New PAN Card Application (Form 49A)',
-    service_id: 'srv-pan-new',
-    category: 'PAN Card',
-    village: 'Gaini',
-    address: 'Inter College Road, Gaini, Bareilly',
-    message: 'Need physical PAN card urgently for college admission',
-    preferred_contact: 'WhatsApp',
-    urgency: 'Normal',
-    status: 'New',
-    created_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString()
+    notice_id: 'NTC-002',
+    title_en: 'UP Scholarship 2026 Pre & Post Matric Applications Open',
+    title_hi: 'यूपी छात्रवृत्ति 2026 दशमोत्तर एवं पूर्वदशम आवेदन प्रारंभ',
+    description_en: 'Apply online with Marksheet, Income Certificate, Caste Certificate, and Bank Passbook linked with NPCI.',
+    description_hi: 'कक्षा 9, 10, 11, 12 एवं बीए, बीएससी, आईटीआई छात्रवृत्ति के नए एवं नवीनीकरण फॉर्म भरने हेतु संपर्क करें।',
+    category: 'Education & Scholarship',
+    badge_type: 'New',
+    last_date: '15-05-2026',
+    action_link: '/contact',
+    status: 'Active',
+    created_at: new Date().toISOString()
   },
   {
-    enquiry_id: 'BALAJI-APP-2026-005',
-    customer_name: 'Mohammad Arif',
-    applicant_name: 'Mohammad Arif',
-    father_or_husband_name: 'Shri Abdul Gaffar',
-    mobile: '9837654321',
-    service_name: 'Ayushman Bharat Golden Card (PM-JAY 5 Lakh Treatment)',
-    service_id: 'srv-ayushman-card',
-    category: 'Ayushman',
-    village: 'Gaini',
-    address: 'Masjid Bali Gali, Gaini, Bareilly',
-    message: 'Family name listed in SECC list, need PVC Ayushman card print',
-    preferred_contact: 'WhatsApp',
-    urgency: 'Normal',
-    status: 'Completed',
-    created_at: new Date(Date.now() - 72 * 3600 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 20 * 3600 * 1000).toISOString()
+    notice_id: 'NTC-003',
+    title_en: 'Free Aadhaar Document Update Extended by UIDAI',
+    title_hi: 'मुफ्त आधार कार्ड दस्तावेज अपडेट सुविधा का लाभ उठाएं',
+    description_en: 'UIDAI has extended online proof of identity and address update for cards older than 10 years.',
+    description_hi: 'जिनका आधार कार्ड 10 वर्ष से अधिक पुराना है, वे अपनी पहचान एवं पते का प्रमाण तुरंत अपडेट करवाएं।',
+    category: 'Aadhaar Alert',
+    badge_type: 'Important',
+    last_date: '30-06-2026',
+    action_link: '/services',
+    status: 'Active',
+    created_at: new Date().toISOString()
+  }
+];
+
+export const INITIAL_QUICKLINKS: QuickLinkItem[] = [
+  {
+    link_id: 'LNK-001',
+    portal_name: 'e-District Uttar Pradesh (ई-डिस्ट्रिक्ट)',
+    department: 'Revenue & IT Department UP',
+    category: 'Certificates',
+    portal_url: 'https://edistrict.up.gov.in',
+    description: 'Official UP portal for Income, Caste, Domicile, Birth, Death certificates and revenue services.',
+    portal_login_type: 'CSC Operator / Citizen Login',
+    required_credentials: 'Kendra Operator ID / OTP'
+  },
+  {
+    link_id: 'LNK-002',
+    portal_name: 'UIDAI Official MyAadhaar Portal',
+    department: 'Ministry of Electronics and IT',
+    category: 'Aadhaar Services',
+    portal_url: 'https://myaadhaar.uidai.gov.in',
+    description: 'Download e-Aadhaar, PVC card order, check update status, and verify mobile/email.',
+    portal_login_type: 'Citizen Aadhaar OTP / Biometric',
+    required_credentials: 'Aadhaar Number + Registered Mobile'
+  },
+  {
+    link_id: 'LNK-003',
+    portal_name: 'UP Bhulekh Land Records (भूलेख खतौनी)',
+    department: 'Board of Revenue Uttar Pradesh',
+    category: 'Land Records',
+    portal_url: 'https://upbhulekh.gov.in',
+    description: 'View and print authenticated RoR Khatauni, Gata number details, and land parcel ownership.',
+    portal_login_type: 'Open Public Search / Certified Copy',
+    required_credentials: 'District, Tehsil, Village Code, Gata/Khasra No'
+  },
+  {
+    link_id: 'LNK-004',
+    portal_name: 'National Voter Service Portal (ECI Voters)',
+    department: 'Election Commission of India',
+    category: 'Voter ID',
+    portal_url: 'https://voters.eci.gov.in',
+    description: 'New Form 6 voter enrollment, Form 8 address/photo correction, and EPIC digital download.',
+    portal_login_type: 'Mobile Login / ECI User',
+    required_credentials: 'EPIC Voter Number / Mobile OTP'
+  },
+  {
+    link_id: 'LNK-005',
+    portal_name: 'PM Kisan Samman Nidhi Portal',
+    department: 'Ministry of Agriculture & Farmers Welfare',
+    category: 'Agriculture',
+    portal_url: 'https://pmkisan.gov.in',
+    description: 'Beneficiary status check, biometric e-KYC, land correction, and farmer grievance redressal.',
+    portal_login_type: 'CSC Login / Farmer Self Service',
+    required_credentials: 'Aadhaar / Farmer Registration Number'
   }
 ];
 
