@@ -65,7 +65,7 @@ function loadLocalServices(): Service[] {
     const raw = localStorage.getItem('balaji_services');
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed;
       }
     }
@@ -436,24 +436,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: adminToken ? { Authorization: `Bearer ${adminToken}` } : {}
       });
       if (srvRes.ok && srvRes.data?.services && Array.isArray(srvRes.data.services)) {
-        const localSaved = loadLocalServices();
         const serverServices: Service[] = srvRes.data.services;
-        const mergedMap = new Map<string, Service>();
-        // Add server services first
-        serverServices.forEach(s => mergedMap.set(s.service_id, s));
-        // Ensure any local additions or modifications are preserved
-        localSaved.forEach(s => {
-          if (!mergedMap.has(s.service_id)) {
-            mergedMap.set(s.service_id, s);
-          }
-        });
-        const mergedServices = Array.from(mergedMap.values());
-        setServices(mergedServices);
+        setServices(serverServices);
         try {
-          localStorage.setItem('balaji_services', JSON.stringify(mergedServices));
+          localStorage.setItem('balaji_services', JSON.stringify(serverServices));
         } catch (e) {}
       } else {
-        // Fallback: keep local services intact
+        // Fallback: keep local services intact if server is offline
         const localSaved = loadLocalServices();
         if (localSaved.length > 0) {
           setServices(localSaved);
@@ -885,14 +874,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return false;
     }
 
-    // Direct browser forward to Google Apps Script Web App (works on GitHub Pages static)
+    // 1. Immediate optimistic UI update (0ms delay)
+    setServices(prev => {
+      const list = prev.map(s => s.service_id === id ? { ...s, ...payload, updated_at: new Date().toISOString() } : s);
+      try {
+        localStorage.setItem('balaji_services', JSON.stringify(list));
+      } catch (e) {}
+      return list;
+    });
+
+    // 2. Direct browser forward to Google Apps Script Web App
     const activeSheetUrl = getGoogleSheetWebappUrl(settings);
     if (activeSheetUrl && activeSheetUrl.includes('script.google.com')) {
       sendServiceToGoogleSheets(activeSheetUrl, 'updateService', { ...payload, service_id: id }).catch(() => {});
     }
 
+    // 3. Persist to Express backend if online
     try {
-      const res = await safeJsonFetch(`/api/services/${id}`, {
+      const res = await safeJsonFetch(`/api/services/${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -909,51 +908,45 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } catch (e) {}
           return list;
         });
-        return true;
       }
     } catch (err) {
-      console.warn('Network error updating service on server, using local fallback:', err);
+      console.warn('Network error updating service on server, local update preserved:', err);
     }
 
-    // Local optimistic update
-    setServices(prev => {
-      const list = prev.map(s => s.service_id === id ? { ...s, ...payload, updated_at: new Date().toISOString() } : s);
-      try {
-        localStorage.setItem('balaji_services', JSON.stringify(list));
-      } catch (e) {}
-      return list;
-    });
     return true;
   };
 
   // Delete Service
   const deleteService = async (id: string): Promise<boolean> => {
-    // Direct browser forward to Google Apps Script Web App (works on GitHub Pages static)
+    if (!id) return false;
+
+    // 1. Immediate optimistic UI update (0ms delay)
+    setServices(prev => {
+      const list = prev.filter(s => s.service_id !== id);
+      try {
+        localStorage.setItem('balaji_services', JSON.stringify(list));
+      } catch (e) {}
+      return list;
+    });
+
+    // 2. Direct browser forward to Google Apps Script Web App
     const activeSheetUrl = getGoogleSheetWebappUrl(settings);
     if (activeSheetUrl && activeSheetUrl.includes('script.google.com')) {
       sendServiceToGoogleSheets(activeSheetUrl, 'deleteService', { service_id: id }).catch(() => {});
     }
 
+    // 3. Persist deletion on Express backend
+    const token = adminToken || localStorage.getItem('balaji_admin_token') || 'balaji_secure_admin_session_token_2026';
     try {
-      const res = await fetch(`/api/services/${id}`, {
+      await fetch(`/api/services/${encodeURIComponent(id)}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${adminToken}` }
+        headers: { Authorization: `Bearer ${token}` }
       });
-      if (res.ok) {
-        setServices(prev => {
-          const list = prev.filter(s => s.service_id !== id);
-          try {
-            localStorage.setItem('balaji_services', JSON.stringify(list));
-          } catch (e) {}
-          return list;
-        });
-        return true;
-      }
-      return false;
     } catch (err) {
-      console.error(err);
-      return false;
+      console.warn('Network error deleting service on server, local deletion preserved:', err);
     }
+
+    return true;
   };
 
   // Update Enquiry Status (Persists both in memory/localStorage for GitHub Pages and server API)

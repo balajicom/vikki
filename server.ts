@@ -624,16 +624,57 @@ app.put('/api/services/:id', checkAdminAuth, (req, res) => {
   db.services[idx] = updatedService;
   saveDatabase(db);
 
+  // If a Google Apps Script Web App URL is configured, forward service update asynchronously
+  if (db.settings.google_sheet_webapp_url && db.settings.google_sheet_webapp_url.includes('script.google.com')) {
+    try {
+      fetch(db.settings.google_sheet_webapp_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'updateService',
+          service_id: updatedService.service_id,
+          id: updatedService.service_id,
+          token: ADMIN_TOKEN,
+          data: updatedService
+        })
+      }).catch(e => console.warn('Background sync update to Google Sheet error:', e.message));
+
+      const getUpdUrl = `${db.settings.google_sheet_webapp_url}${db.settings.google_sheet_webapp_url.includes('?') ? '&' : '?'}action=updateService&service_id=${encodeURIComponent(updatedService.service_id)}&service_name_en=${encodeURIComponent(updatedService.service_name_en || '')}&service_name_hi=${encodeURIComponent(updatedService.service_name_hi || '')}&status=${encodeURIComponent(updatedService.status || 'Active')}`;
+      fetch(getUpdUrl).catch(() => {});
+    } catch (ignore) {}
+  }
+
   res.json({ success: true, service: updatedService });
 });
 
 app.delete('/api/services/:id', checkAdminAuth, (req, res) => {
   const initialLength = db.services.length;
-  db.services = db.services.filter(s => s.service_id !== req.params.id);
+  const targetId = req.params.id;
+  db.services = db.services.filter(s => s.service_id !== targetId);
   if (db.services.length === initialLength) {
     return res.status(404).json({ error: "Service not found" });
   }
   saveDatabase(db);
+
+  // If a Google Apps Script Web App URL is configured, forward service deletion asynchronously
+  if (db.settings.google_sheet_webapp_url && db.settings.google_sheet_webapp_url.includes('script.google.com')) {
+    try {
+      fetch(db.settings.google_sheet_webapp_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'deleteService',
+          service_id: targetId,
+          id: targetId,
+          token: ADMIN_TOKEN
+        })
+      }).catch(e => console.warn('Background sync delete to Google Sheet error:', e.message));
+
+      const getDelUrl = `${db.settings.google_sheet_webapp_url}${db.settings.google_sheet_webapp_url.includes('?') ? '&' : '?'}action=deleteService&service_id=${encodeURIComponent(targetId)}`;
+      fetch(getDelUrl).catch(() => {});
+    } catch (ignore) {}
+  }
+
   res.json({ success: true, message: "Service deleted successfully" });
 });
 

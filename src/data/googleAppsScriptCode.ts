@@ -4,29 +4,274 @@ export const GOOGLE_APPS_SCRIPT_CODE = `/**
  * MASTER GOOGLE APPS SCRIPT BACKEND (ALL TEMPLATES SUPPORTED)
  * =========================================================================
  * 
- * QUICK SETUP GUIDE:
- * 1. Open Google Sheets at https://sheets.new
- * 2. Rename spreadsheet: "Balaji Communication Master Database"
- * 3. Go to Extensions > Apps Script
- * 4. Paste this complete code into Code.gs (replacing any existing code)
- * 5. In toolbar dropdown, select "setupAllTemplateSheets" and click "Run"
- *    -> Click "Review permissions" -> Select your Google Account -> Click "Advanced" -> "Go to (unsafe)" -> "Allow"
- *    -> This creates all 7 tabs automatically (Services, Enquiries, PriceList, etc.)
- * 6. Click "Deploy" > "New deployment"
- *    - Click the gear icon (Select type) -> Choose "Web app"
+ * QUICK SETUP GUIDE (Takes 1-2 minutes):
+ * 1. Open Google Sheets at https://sheets.new (or open your existing sheet)
+ * 2. In Google Sheets menu, click: Extensions > Apps Script
+ * 3. Delete any code already there, paste this entire code into Code.gs, and click Save (💾 icon)
+ * 4. With "setupAllTemplateSheets" selected in the toolbar dropdown, click "Run" (▶ icon)
+ *    -> Click "Review permissions" -> Choose your Google account
+ *    -> Click "Advanced" -> Click "Go to Balaji Database (unsafe)" -> Click "Allow"
+ *    -> All 7 organized tabs will be created instantly with headers and services!
+ * 5. Click "Deploy" (top right) > "New deployment"
+ *    - Click the gear icon next to "Select type" -> choose "Web app"
  *    - Description: "Balaji Database API"
  *    - Execute as: "Me" (your Google account)
- *    - WHO HAS ACCESS: "Anyone"  <--- [VERY IMPORTANT! Do NOT select "Only myself"]
- *      (If "Only myself" is selected, Google blocks access and redirects to a login page)
- * 7. Click "Deploy" -> Copy the Web App URL (ends with "/exec")
- * 8. Paste into Balaji Admin Dashboard > "Google Spreadsheet Link or Apps Script Web App URL" box!
+ *    - WHO HAS ACCESS: "Anyone"  <--- [VERY IMPORTANT! Do NOT choose "Only myself"]
+ * 6. Click "Deploy" -> Copy the Web App URL (ends with "/exec")
+ * 7. Paste that URL into the Balaji Admin Dashboard > "Google Sheets / Web App Sync" box!
  */
 
+// =========================================================================
+// SPREADSHEET CONFIGURATION
+// If you opened this script from inside Google Sheets (Extensions > Apps Script),
+// leave SPREADSHEET_ID empty (""). It will auto-detect your active spreadsheet.
+//
+// ONLY if you created a standalone script at script.google.com, paste your
+// Google Spreadsheet ID or full URL between the quotes below:
+var SPREADSHEET_ID = "";
+// =========================================================================
+
+/**
+ * Robust helper to retrieve the spreadsheet whether container-bound or standalone.
+ */
+function getSpreadsheet() {
+  var ss = null;
+  try {
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+  } catch (e) {}
+
+  if (!ss && SPREADSHEET_ID && SPREADSHEET_ID.trim()) {
+    var raw = SPREADSHEET_ID.trim();
+    var cleanId = raw;
+    if (raw.indexOf("/spreadsheets/d/") !== -1) {
+      cleanId = raw.split("/spreadsheets/d/")[1].split("/")[0].split("?")[0].split("#")[0];
+    }
+    try {
+      ss = SpreadsheetApp.openById(cleanId);
+    } catch (openErr) {
+      Logger.log("Failed to open spreadsheet by ID: " + openErr.toString());
+    }
+  }
+
+  if (!ss) {
+    try {
+      var active = SpreadsheetApp.getActiveSheet();
+      if (active) ss = active.getParent();
+    } catch (e) {}
+  }
+
+  if (!ss) {
+    throw new Error(
+      "Spreadsheet not found! Please open this script directly from inside your Google Sheet by clicking: Extensions > Apps Script (OR paste your Spreadsheet ID/URL into SPREADSHEET_ID at line 25 of Code.gs)."
+    );
+  }
+  return ss;
+}
+
+// =========================================================================
+// 1. AUTO-SETUP MACRO (First function so it is selected by default in toolbar)
+// =========================================================================
+function setupAllTemplateSheets() {
+  var ss = getSpreadsheet();
+  Logger.log("Starting setup for spreadsheet: " + ss.getName());
+
+  // 1. SERVICES TAB (Full Balaji Communication Master Service Catalog - 16 Services)
+  try {
+    var srvSheet = getOrCreateSheet(ss, "Services");
+    srvSheet.clearContents();
+    var srvHeaders = [
+      "service_id", "service_name_en", "service_name_hi", "category",
+      "short_description_en", "short_description_hi", "full_description_en", "full_description_hi",
+      "required_documents", "icon", "status", "popular", "estimated_time", "whatsapp_message"
+    ];
+    srvSheet.appendRow(srvHeaders);
+    var defaultServices = [
+      ["srv-aadhaar-mob", "Aadhaar Mobile Number Update", "आधार मोबाइल नंबर अपडेट / जोड़ना", "Aadhaar", "Quick assistance for linking or updating active mobile number in Aadhaar.", "अपने आधार कार्ड में चालू मोबाइल नंबर लिंक या अपडेट करवाने के लिए आसान सहायता।", "Updating mobile number in Aadhaar is essential for receiving OTPs for banking, ITR verification, DigiLocker, and availing all government online benefits.", "आधार में मोबाइल नंबर लिंक होना बैंक, डिजीलॉकर, राशन कार्ड और सरकारी योजनाओं के ओटीपी के लिए अनिवार्य है।", "Original Aadhaar Card\\nActive Mobile SIM", "Smartphone", "Active", "yes", "24-48 Hours", "Hello Balaji Communication, I want information about Aadhaar Mobile Number Update."],
+      ["srv-aadhaar-corr", "Aadhaar Correction & Address Update", "आधार सुधार एवं पता बदलाव", "Aadhaar", "Name, DOB, gender, or address correction in your existing Aadhaar card with valid proof.", "आधार कार्ड में नाम, जन्मतिथि, लिंग अथवा पते में सुधार के लिए उचित दस्तावेजों के साथ आवेदन।", "Get corrections in demographic details updated in UIDAI database.", "UIDAI नियमों के अनुसार आधार कार्ड में नाम, पिता/पति का नाम, जन्मतिथि एवं आवासीय पता ठीक कराने हेतु सहायता।", "Existing Aadhaar Card copy\\nProof of Identity / Address", "UserCheck", "Active", "yes", "3-7 Working Days", "Hello Balaji Communication, I want information about Aadhaar Correction."],
+      ["srv-aadhaar-down", "Aadhaar Download & PVC Card Print", "आधार कार्ड डाउनलोड एवं पीवीसी कार्ड प्रिंट", "Aadhaar", "Instant e-Aadhaar PDF download and ordering durable plastic PVC Aadhaar card.", "तुरंत ई-आधार डाउनलोड और वॉटरप्रूफ सुरक्षित पीवीसी (प्लास्टिक) कार्ड बनवाने की सुविधा।", "Lost your physical Aadhaar card? Get high-quality e-Aadhaar downloaded instantly through OTP.", "यदि आधार खो गया है, तो तुरंत ओटीपी के माध्यम से ई-आधार डाउनलोड कराएं या पीवीसी प्लास्टिक कार्ड मंगवाएं।", "Aadhaar Number or Enrollment ID\\nRegistered Mobile Phone", "CreditCard", "Active", "yes", "Instant Download / 7-10 days Speed Post", "Hello Balaji Communication, I want information about Aadhaar Download and PVC Card."],
+      ["srv-ration-new", "New Ration Card Application", "नया राशन कार्ड ऑनलाइन आवेदन", "Ration Card", "Assistance in applying for new APL/BPL/Antyodaya ration cards for eligible families.", "पात्र परिवारों के लिए नया राशन कार्ड ऑनलाइन अप्लाई करने में सहायता।", "Complete documentation and online portal registration for fresh ration card applications.", "परिवार के सभी सदस्यों के विवरण, आधार एवं आय प्रमाण पत्र के साथ नए राशन कार्ड के लिए आवेदन।", "Head of Family Aadhaar & Photo\\nFamily Aadhaar copies\\nIncome Certificate\\nBank Passbook", "FileSpreadsheet", "Active", "yes", "15-30 Working Days", "Hello Balaji Communication, I want information about New Ration Card Apply."],
+      ["srv-ration-corr", "Ration Card Correction & Member Add/Remove", "राशन कार्ड संशोधन एवं यूनिट जोड़ना/हटाना", "Ration Card", "Add new family member/child, remove married member, or correct names in ration card.", "राशन कार्ड में नए बच्चे/सदस्य का नाम जोड़ना, नाम हटाना अथवा गलतियों में सुधार।", "Online submission for adding newborn children or daughters-in-law into existing ration cards.", "विवाह के पश्चात नई बहू का नाम जोड़ना या नवजात शिशु की यूनिट जोड़ने की ऑनलाइन प्रक्रिया।", "Original Ration Card Number\\nNew member Aadhaar / Birth Certificate", "Users", "Active", "no", "10-20 Working Days", "Hello Balaji Communication, I want information about Ration Card Member Addition."],
+      ["srv-pmkisan-reg", "PM Kisan Samman Nidhi Registration", "पीएम किसान सम्मान निधि नया पंजीकरण", "PM Kisan", "New farmer enrollment to receive ₹6,000 yearly direct benefit from Government of India.", "पात्र किसान भाइयों के लिए सालाना ₹6,000 सहायता प्राप्त करने हेतु नया ऑनलाइन पंजीकरण।", "Assistance for small and marginal farmer families to register under PM-KISAN scheme.", "पीएम-किसान योजना के अंतर्गत किसानों का ऑनलाइन रजिस्ट्रेशन, खतौनी भूलेख विवरण दर्ज करना।", "Farmer Aadhaar Card\\nKhatauni Land Record\\nBank Passbook\\nMobile linked with Aadhaar", "Tractor", "Active", "yes", "Departmental Verification", "Hello Balaji Communication, I want information about PM Kisan Registration."],
+      ["srv-pmkisan-kyc", "PM Kisan e-KYC & Status Check", "पीएम किसान ई-केवाईसी एवं किस्त स्थिति जांच", "PM Kisan", "Mandatory OTP/Biometric e-KYC to ensure continuous payment of PM Kisan installments.", "किस्त न रुकने पाए इसके लिए बायोमेट्रिक या आधार ओटीपी से तुरंत ई-केवाईसी करवाएं।", "If your PM-Kisan installment is stuck due to pending eKYC or land seeding, visit our center.", "अटकी हुई किस्तें चालू कराने और ई-केवाईसी फिंगरप्रिंट या ओटीपी द्वारा तुरंत पूर्ण कराने की सेवा।", "Aadhaar Card\\nAadhaar Registered Mobile", "ShieldCheck", "Active", "yes", "Instant (5 Minutes)", "Hello Balaji Communication, I want information about PM Kisan e-KYC."],
+      ["srv-ayushman-card", "Ayushman Card Apply & Download", "आयुष्मान भारत गोल्डन कार्ड (₹5 लाख मुफ्त इलाज)", "Ayushman", "Check eligibility under PM-JAY and apply/download your cashless hospital treatment card.", "प्रतिवर्ष ₹5 लाख तक के मुफ्त इलाज हेतु आयुष्मान भारत कार्ड की पात्रता जांच, आवेदन व डाउनलोड।", "Eligible families get cashless treatment up to ₹5 lakh per year in empanelled hospitals.", "पात्रता सूची या राशन कार्ड के आधार पर आयुष्मान कार्ड केवाईसी, नाम सर्च और तुरंत ओरिजिनल आयुष्मान पीवीसी कार्ड प्रिंट।", "Aadhaar Card\\nRation Card or PM-JAY letter\\nMobile Phone for OTP", "HeartPulse", "Active", "yes", "Instant verification / 24-48 Hours Approval", "Hello Balaji Communication, I want information about Ayushman Card."],
+      ["srv-voter-id", "Voter ID / पहचान पत्र Apply & Correction", "वोटर आईडी (पहचान पत्र) नया आवेदन एवं संशोधन", "Voter ID", "New voter registration (Form 6), address shift (Form 8), and digital e-EPIC download.", "18 वर्ष पूर्ण होने पर नया पहचान पत्र बनवाना, पता बदलना या डिजिटल वोटर कार्ड डाउनलोड।", "Assistance on Election Commission of India (ECI) portal to apply for fresh voter ID card.", "भारत निर्वाचन आयोग के पोर्टल पर फॉर्म 6 द्वारा नया पहचान पत्र आवेदन एवं संशोधन।", "Passport Photo\\nAge Proof\\nAddress Proof", "Vote", "Active", "yes", "15-30 Days", "Hello Balaji Communication, I want information about Voter ID application."],
+      ["srv-pan-card", "PAN Card Apply & Correction", "नया पैन कार्ड आवेदन एवं सुधार", "PAN Card", "New Instant e-PAN, minor PAN card, or correction in name/father's name.", "नया पैन कार्ड (वयस्क/नाबालिग), खोए हुए पैन को दोबारा प्राप्त करना या नाम सुधार।", "Online submission via NSDL / UTIITSL for new PAN allocation or updating details.", "NSDL / UTIITSL पोर्टल के माध्यम से नया पैन कार्ड आवेदन। 2 से 3 दिन में ई-पैन एवं स्पीड पोस्ट द्वारा घर पर ओरिजिनल कार्ड।", "Aadhaar Card\\nTwo Passport Photos", "BadgePercent", "Active", "yes", "2-3 Days e-PAN / 10-15 Days physical card", "Hello Balaji Communication, I want information about PAN Card application."],
+      ["srv-income-cert", "Income Certificate (आय प्रमाण पत्र)", "आय प्रमाण पत्र ऑनलाइन आवेदन", "Certificates", "Government issued income certificate for student scholarships, fee concession, and schemes.", "छात्रवृत्ति, स्कूल-कॉलेज प्रवेश एवं सरकारी योजनाओं हेतु अधिकृत आय प्रमाण पत्र।", "Assistance on state e-District portal for applying and downloading Tehsildar verified certificate.", "ई-डिस्ट्रिक्ट पोर्टल के माध्यम से स्वप्रमाणित घोषणा पत्र के साथ आय प्रमाण पत्र का आवेदन।", "Aadhaar Card\\nSelf-Declaration Form\\nSalary/Gram Pradhan report\\nPhoto", "FileCheck2", "Active", "yes", "7-15 Working Days", "Hello Balaji Communication, I want information about Income Certificate."],
+      ["srv-caste-cert", "Caste Certificate (जाति प्रमाण पत्र)", "जाति प्रमाण पत्र (SC / ST / OBC / EWS)", "Certificates", "Official caste certificate for competitive examinations, reservations, and state benefits.", "सरकारी नौकरियों, आरक्षण एवं उच्च शिक्षा में लाभ हेतु अधिकृत जाति प्रमाण पत्र।", "State and Central format caste certificates application with proper revenue validation.", "राज्य एवं केंद्र सरकार के प्रारूप में एससी, एसटी, ओबीसी एवं ईडब्ल्यूएस प्रमाण पत्र का ऑनलाइन आवेदन।", "Aadhaar Card\\nOld family caste proof / registry\\nSelf-Declaration\\nPhoto", "Award", "Active", "no", "7-15 Working Days", "Hello Balaji Communication, I want information about Caste Certificate."],
+      ["srv-residence-cert", "Residence / Domicile Certificate (निवास प्रमाण पत्र)", "मूल निवास प्रमाण पत्र ऑनलाइन आवेदन", "Certificates", "Valid proof of permanent residence for admissions, government jobs, and police verification.", "स्थानीय निवासी होने का कानूनी प्रमाण पत्र, जो नौकरियों एवं प्रवेश में अनिवार्य है।", "Apply for official Domicile (Niwas Praman Patra) through e-District platform.", "तहसीलदार स्तर से सत्यापित डिजिटल हस्ताक्षरित मूल निवास प्रमाण पत्र के लिए ऑनलाइन आवेदन।", "Aadhaar Card\\nElectricity Bill / Voter ID\\nPhoto", "Home", "Active", "no", "7-15 Working Days", "Hello Balaji Communication, I want information about Residence / Domicile Certificate."],
+      ["srv-birth-cert", "Birth Certificate Assistance (जन्म प्रमाण पत्र)", "जन्म प्रमाण पत्र ऑनलाइन सहायता", "Certificates", "Assistance in applying for municipal birth certificate for new-borns and delayed registrations.", "नगर निगम / ब्लॉक स्तर पर नवजात बच्चों अथवा छूटे हुए जन्म प्रमाण पत्र के लिए मार्गदर्शन।", "Civil Registration System (CRS) application filing and hospital discharge slip submission.", "सीआरएस पोर्टल पर जन्म पंजीकरण एवं अस्पताल की डिस्चार्ज स्लिप के साथ आवेदन।", "Hospital Discharge Slip\\nParents Aadhaar\\nMarriage proof", "Baby", "Active", "no", "10-21 Working Days", "Hello Balaji Communication, I want information about Birth Certificate."],
+      ["srv-online-forms", "Online Form Filling & Govt Job Applications", "सरकारी नौकरी फॉर्म एवं ऑनलाइन फॉर्म फिलिंग", "Other Digital Services", "Error-free form filling for SSC, Police, Railway, UPSC, Teaching, and college admissions.", "एसएससी, रेलवे, पुलिस, शिक्षक भर्ती, नीट, जेईई एवं अन्य प्रतियोगी परीक्षाओं के सही फॉर्म।", "Professional form submission with exact photo & signature resizing, document scanning, fee payment receipt generation.", "सटीक फोटो/हस्ताक्षर साइजिंग, योग्यता विवरण प्रविष्टि, सुरक्षित ऑनलाइन फीस भुगतान और प्रिंट आउट।", "Educational Marksheets\\nClear photo & signature\\nAadhaar Card", "FileText", "Active", "yes", "Immediate submission with receipt", "Hello Balaji Communication, I want information about Online Form Filling."],
+      ["srv-print-scan", "Print, Scan, Photocopy & Passport Photos", "प्रिंट, स्कैन, फोटोकॉपी एवं तत्काल पासपोर्ट साइज फोटो", "Other Digital Services", "High-resolution color printing, document lamination, and instant 5-minute passport photos.", "हाई-क्वालिटी रंगीन व ब्लैक-व्हाइट प्रिंट, दस्तावेज लैमिनेशन एवं 5 मिनट में पासपोर्ट फोटो।", "Walk-in facilities for high-speed laser printing from WhatsApp/Email/Pen-drive, crisp scanning to PDF.", "व्हाट्सएप, ईमेल अथवा पेनड्राइव से तुरंत प्रिंट, सभी प्रकार के कागजातों की फोटोकॉपी एवं लैमिनेशन।", "Original Document or Soft copy", "Printer", "Active", "no", "Instant Walk-in (2-5 Minutes)", "Hello Balaji Communication, I want to print or scan documents."]
+    ];
+    for (var sIdx = 0; sIdx < defaultServices.length; sIdx++) {
+      srvSheet.appendRow(defaultServices[sIdx]);
+    }
+    formatHeaderRow(srvSheet, "#1E3A8A");
+  } catch (errSrv) {
+    Logger.log("Services tab setup error: " + errSrv.toString());
+  }
+
+  // 2. ENQUIRIES TAB (Header only - clean register ready for live citizen applications)
+  try {
+    var enqSheet = getOrCreateSheet(ss, "Enquiries");
+    if (enqSheet.getLastRow() === 0) {
+      enqSheet.appendRow([
+        "enquiry_id", "customer_name", "father_or_husband_name", "mobile", "service_name",
+        "category", "village", "address", "message", "preferred_contact", "urgency", "status", "created_at"
+      ]);
+    }
+    formatHeaderRow(enqSheet, "#065F46");
+  } catch (errEnq) {
+    Logger.log("Enquiries tab setup error: " + errEnq.toString());
+  }
+
+  // 3. PRICELIST TAB (Transparent CSC Government Fee & Kendra Rate Card)
+  try {
+    var prcSheet = getOrCreateSheet(ss, "PriceList");
+    prcSheet.clearContents();
+    prcSheet.appendRow([
+      "price_id", "service_name", "category", "government_fee", "csc_service_fee",
+      "total_fee", "processing_time", "eligibility_or_note", "status"
+    ]);
+    var defaultPrices = [
+      ["PRC-001", "Aadhaar Mobile Number Update", "Aadhaar Services", "₹50", "₹30", "₹80", "24 to 48 Hours", "UIDAI biometric update fee + Kendra verification assistance", "Active"],
+      ["PRC-002", "Income / Caste / Domicile Certificate", "Revenue & eDistrict UP", "₹15", "₹35", "₹50", "7 to 10 Days", "Official UP Govt treasury challan + online application & scanning", "Active"],
+      ["PRC-003", "New PAN Card (Physical Delivery to Home)", "NSDL / UTI Services", "₹107", "₹93", "₹200", "10 to 15 Days", "NSDL official fee + biometric e-KYC and Speed Post plastic card", "Active"],
+      ["PRC-004", "Ayushman Bharat Golden Card Print", "Health Mission", "₹0 (Govt Free)", "₹30", "₹30", "Instant 5 Mins", "Government subsidy is free; High-grade waterproof PVC print charge", "Active"],
+      ["PRC-005", "PM Kisan Samman Nidhi e-KYC", "Agriculture Services", "₹0 (Govt Free)", "₹20", "₹20", "Instant Thumb Scan", "Biometric thumb authentication machine and portal server charge", "Active"],
+      ["PRC-006", "New Ration Card Application", "Food & Civil Supplies", "₹0 (Govt Free)", "₹60", "₹60", "15 to 30 Days", "Online FCS portal filing, unit registration and document upload", "Active"],
+      ["PRC-007", "Voter ID New Registration / Correction", "Election Commission", "₹0 (Govt Free)", "₹40", "₹40", "15 to 30 Days", "Form 6 / Form 8 application filing with BLO follow-up guidance", "Active"],
+      ["PRC-008", "PVC Smart Plastic Card Print (Aadhaar / Voter / PAN)", "Digital Print Services", "₹0", "₹50", "₹50", "Instant 5 Mins", "High definition UV waterproof smart PVC plastic card printing", "Active"]
+    ];
+    for (var pIdx = 0; pIdx < defaultPrices.length; pIdx++) {
+      prcSheet.appendRow(defaultPrices[pIdx]);
+    }
+    formatHeaderRow(prcSheet, "#7C2D12");
+  } catch (errPrc) {
+    Logger.log("PriceList tab setup error: " + errPrc.toString());
+  }
+
+  // 4. NOTICE BOARD TAB (Live scheme announcements & deadlines)
+  try {
+    var ntcSheet = getOrCreateSheet(ss, "NoticeBoard");
+    ntcSheet.clearContents();
+    ntcSheet.appendRow([
+      "notice_id", "title_en", "title_hi", "description_en", "description_hi",
+      "category", "badge_type", "last_date", "action_link", "status", "created_at"
+    ]);
+    var defaultNotices = [
+      ["NTC-001", "PM Kisan 19th Installment e-KYC Mandatory", "पीएम किसान 19वीं किस्त हेतु बायोमेट्रिक ई-केवाईसी अनिवार्य", "Farmers who have not completed biometric e-KYC must visit Balaji Communication to avoid installment blockage.", "जिन किसान भाइयों की ई-केवाईसी पूरी नहीं है, वे अपनी आगामी किस्त पाने के लिए तुरंत केंद्र पर आकर फिंगरप्रिंट से ई-केवाईसी कराएं।", "PM Kisan", "Urgent", "31-03-2026", "/services", "Active", new Date().toISOString()],
+      ["NTC-002", "UP Scholarship 2026 Pre & Post Matric Applications Open", "यूपी छात्रवृत्ति 2026 दशमोत्तर एवं पूर्वदशम आवेदन प्रारंभ", "Apply online with Marksheet, Income Certificate, Caste Certificate, and Bank Passbook linked with NPCI.", "कक्षा 9, 10, 11, 12 एवं बीए, बीएससी, आईटीआई छात्रवृत्ति के नए एवं नवीनीकरण फॉर्म भरने हेतु संपर्क करें।", "Education & Scholarship", "New", "15-05-2026", "/contact", "Active", new Date().toISOString()],
+      ["NTC-003", "Free Aadhaar Document Update Extended by UIDAI", "मुफ्त आधार कार्ड दस्तावेज अपडेट सुविधा का लाभ उठाएं", "UIDAI has extended online proof of identity and address update for cards older than 10 years.", "जिनका आधार कार्ड 10 वर्ष से अधिक पुराना है, वे अपनी पहचान एवं पते का प्रमाण तुरंत अपडेट करवाएं।", "Aadhaar Alert", "Important", "30-06-2026", "/services", "Active", new Date().toISOString()]
+    ];
+    for (var nIdx = 0; nIdx < defaultNotices.length; nIdx++) {
+      ntcSheet.appendRow(defaultNotices[nIdx]);
+    }
+    formatHeaderRow(ntcSheet, "#92400E");
+  } catch (errNtc) {
+    Logger.log("NoticeBoard tab setup error: " + errNtc.toString());
+  }
+
+  // 5. QUICK LINKS TAB (Direct Official Portals Directory)
+  try {
+    var lnkSheet = getOrCreateSheet(ss, "QuickLinks");
+    lnkSheet.clearContents();
+    lnkSheet.appendRow([
+      "link_id", "portal_name", "department", "category", "portal_url",
+      "description", "portal_login_type", "required_credentials"
+    ]);
+    var defaultLinks = [
+      ["LNK-001", "e-District Uttar Pradesh (ई-डिस्ट्रिक्ट)", "Revenue & IT Department UP", "Certificates", "https://edistrict.up.gov.in", "Official UP portal for Income, Caste, Domicile, Birth certificates.", "CSC Operator / Citizen Login", "Kendra Operator ID / OTP"],
+      ["LNK-002", "UIDAI Official MyAadhaar Portal", "Ministry of Electronics and IT", "Aadhaar Services", "https://myaadhaar.uidai.gov.in", "Download e-Aadhaar, PVC card order, check update status.", "Citizen Aadhaar OTP / Biometric", "Aadhaar Number + Registered Mobile"],
+      ["LNK-003", "UP Bhulekh Land Records (भूलेख खतौनी)", "Board of Revenue Uttar Pradesh", "Land Records", "https://upbhulekh.gov.in", "View and print authenticated RoR Khatauni, Gata number details.", "Open Public Search / Certified Copy", "District, Tehsil, Village Code, Gata/Khasra No"],
+      ["LNK-004", "National Voter Service Portal (ECI Voters)", "Election Commission of India", "Voter ID", "https://voters.eci.gov.in", "New Form 6 voter enrollment, Form 8 correction, EPIC download.", "Mobile Login / ECI User", "EPIC Voter Number / Mobile OTP"],
+      ["LNK-005", "PM Kisan Samman Nidhi Portal", "Ministry of Agriculture & Farmers Welfare", "Agriculture", "https://pmkisan.gov.in", "Beneficiary status check, biometric e-KYC, land correction.", "CSC Login / Farmer Self Service", "Aadhaar / Farmer Registration Number"]
+    ];
+    for (var lIdx = 0; lIdx < defaultLinks.length; lIdx++) {
+      lnkSheet.appendRow(defaultLinks[lIdx]);
+    }
+    formatHeaderRow(lnkSheet, "#4C1D95");
+  } catch (errLnk) {
+    Logger.log("QuickLinks tab setup error: " + errLnk.toString());
+  }
+
+  // 6. CITIZENS REGISTRY TAB (Header only - clean customer master directory)
+  try {
+    var citSheet = getOrCreateSheet(ss, "Citizens");
+    if (citSheet.getLastRow() === 0) {
+      citSheet.appendRow([
+        "citizen_id", "full_name", "father_name", "mobile", "aadhaar_last4",
+        "village", "address", "services_availed", "notes", "status", "created_at"
+      ]);
+    }
+    formatHeaderRow(citSheet, "#1F2937");
+  } catch (errCit) {
+    Logger.log("Citizens tab setup error: " + errCit.toString());
+  }
+
+  // 7. SETTINGS TAB (Balaji Communication Center Info)
+  try {
+    var setSheet = getOrCreateSheet(ss, "Settings");
+    setSheet.clearContents();
+    setSheet.appendRow(["Key", "Value"]);
+    setSheet.appendRow(["business_name_en", "Balaji Communication"]);
+    setSheet.appendRow(["business_name_hi", "बालाजी कम्युनिकेशन"]);
+    setSheet.appendRow(["phone_number", "+919870677605"]);
+    setSheet.appendRow(["whatsapp_number", "919870677605"]);
+    setSheet.appendRow(["email", "vikkysingh9870677605@gmail.com"]);
+    setSheet.appendRow(["address_en", "Shop, Masjid bali gali, Inter college road Gaini, Bareilly, Uttar Pradesh - 243302"]);
+    setSheet.appendRow(["address_hi", "दुकान, मस्जिद वाली गली, इंटर कॉलेज रोड, गैनी, बरेली, उत्तर प्रदेश - 243302"]);
+    formatHeaderRow(setSheet, "#374151");
+  } catch (errSet) {
+    Logger.log("Settings tab setup error: " + errSet.toString());
+  }
+
+  // Safely clean up default empty "Sheet1" if present
+  try {
+    var defaultSheet = ss.getSheetByName("Sheet1");
+    if (defaultSheet && defaultSheet.getLastRow() === 0 && ss.getSheets().length > 1) {
+      ss.deleteSheet(defaultSheet);
+    }
+  } catch (e) {}
+
+  SpreadsheetApp.flush();
+  Logger.log("✅ Balaji Communication Master Database setup completed successfully!");
+  return "✅ Success! All 7 sheet tabs (Services, Enquiries, PriceList, NoticeBoard, QuickLinks, Citizens, Settings) have been created and formatted in your spreadsheet.";
+}
+
+function getOrCreateSheet(ss, name) {
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+  }
+  return sheet;
+}
+
+function formatHeaderRow(sheet, bgColor) {
+  try {
+    var lastCol = sheet.getLastColumn();
+    if (!lastCol || lastCol < 1) lastCol = 10;
+    var range = sheet.getRange(1, 1, 1, lastCol);
+    range.setBackground(bgColor);
+    range.setFontColor("#FFFFFF");
+    range.setFontWeight("bold");
+    if (sheet.getMaxRows() > 1) {
+      sheet.setFrozenRows(1);
+    }
+  } catch (err) {
+    Logger.log("formatHeaderRow notice: " + err.toString());
+  }
+}
+
+// =========================================================================
+// 2. HTTP GET DISPATCHER (doGet) - BROWSER & API ACCESS
+// =========================================================================
 function doGet(e) {
-  var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : "getAllData";
   var result = { status: "error", message: "Invalid action" };
   
   try {
+    var action = (e && e.parameter && e.parameter.action) ? String(e.parameter.action).trim() : "getAllData";
+    
     if (action === "getAllData" || action === "all") {
       result = {
         status: "success",
@@ -85,51 +330,30 @@ function doGet(e) {
       var enqId = (e.parameter && (e.parameter.enquiry_id || e.parameter.id)) ? String(e.parameter.enquiry_id || e.parameter.id) : "";
       var status = (e.parameter && e.parameter.status) ? String(e.parameter.status) : "New";
       result = updateEnquiryStatus(enqId, status);
-    } else if (action === "createService" || action === "addService") {
-      var serviceData = null;
-      if (e.parameter && e.parameter.data) {
-        try {
-          serviceData = JSON.parse(e.parameter.data);
-        } catch (pe) {}
-      }
-      if (!serviceData && e.parameter) {
-        serviceData = {
-          service_id: e.parameter.service_id || e.parameter.id,
-          service_name_en: e.parameter.service_name_en || e.parameter.name_en || e.parameter.name,
-          service_name_hi: e.parameter.service_name_hi || e.parameter.name_hi,
-          category: e.parameter.category,
-          short_description_en: e.parameter.short_description_en,
-          short_description_hi: e.parameter.short_description_hi,
-          full_description_en: e.parameter.full_description_en,
-          full_description_hi: e.parameter.full_description_hi,
-          required_documents: e.parameter.required_documents,
-          icon: e.parameter.icon,
-          status: e.parameter.status,
-          popular: e.parameter.popular === "yes" || e.parameter.popular === "true",
-          estimated_time: e.parameter.estimated_time,
-          whatsapp_message: e.parameter.whatsapp_message
-        };
-      }
-      result = addService(serviceData || {});
-    } else if (action === "updateService") {
-      result = updateService(e.parameter || {});
-    } else if (action === "deleteService") {
-      result = deleteService(e.parameter.service_id || e.parameter.id);
     } else if (action === "ping" || action === "status") {
       result = {
         status: "success",
-        message: "Google Apps Script Web App is connected and working!",
+        message: "Google Apps Script Web App is connected and responding correctly!",
         timestamp: new Date().toISOString()
       };
+    } else {
+      result = { status: "error", message: "Unknown action: " + action };
     }
   } catch (err) {
-    result = { status: "error", message: err.toString() };
+    result = { 
+      status: "error", 
+      message: err.toString(),
+      hint: "Make sure you opened Apps Script via Extensions > Apps Script in your spreadsheet, or set SPREADSHEET_ID in Code.gs."
+    };
   }
   
   return ContentService.createTextOutput(JSON.stringify(result))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+// =========================================================================
+// 3. HTTP POST DISPATCHER (doPost)
+// =========================================================================
 function doPost(e) {
   var result = { status: "error", message: "No data received" };
   
@@ -151,7 +375,7 @@ function doPost(e) {
     
     if (action === "createEnquiry" || action === "addEnquiry") {
       result = addEnquiry(payload.data || payload);
-    } else if (action === "createService") {
+    } else if (action === "createService" || action === "addService") {
       result = addService(payload.data || payload);
     } else if (action === "updateService") {
       result = updateService(payload.data || payload);
@@ -167,6 +391,8 @@ function doPost(e) {
       result = saveCitizenItem(payload.data || payload);
     } else if (action === "updateSettings") {
       result = saveSettingsData(payload.data || payload);
+    } else {
+      result = { status: "error", message: "Unknown POST action: " + action };
     }
   } catch (err) {
     result = { status: "error", message: err.toString() };
@@ -176,157 +402,11 @@ function doPost(e) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-// ==========================================
-// 1-CLICK AUTO SETUP MACRO FOR ALL TEMPLATES
-// ==========================================
-function setupAllTemplateSheets() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  
-  // 1. SERVICES TAB (Full Balaji Communication Master Service Catalog)
-  var srvSheet = getOrCreateSheet(ss, "Services");
-  srvSheet.clearContents();
-  var srvHeaders = [
-    "service_id", "service_name_en", "service_name_hi", "category",
-    "short_description_en", "short_description_hi", "full_description_en", "full_description_hi",
-    "required_documents", "icon", "status", "popular", "estimated_time", "whatsapp_message"
-  ];
-  srvSheet.appendRow(srvHeaders);
-  var defaultServices = [
-    ["srv-aadhaar-mob", "Aadhaar Mobile Number Update", "आधार मोबाइल नंबर अपडेट / जोड़ना", "Aadhaar", "Quick assistance for linking or updating active mobile number in Aadhaar.", "अपने आधार कार्ड में चालू मोबाइल नंबर लिंक या अपडेट करवाने के लिए आसान सहायता।", "Updating mobile number in Aadhaar is essential for receiving OTPs for banking, ITR verification, DigiLocker, and availing all government online benefits.", "आधार में मोबाइल नंबर लिंक होना बैंक, डिजीलॉकर, राशन कार्ड और सरकारी योजनाओं के ओटीपी के लिए अनिवार्य है।", "Original Aadhaar Card\\nActive Mobile SIM", "Smartphone", "Active", "yes", "24-48 Hours", "Hello Balaji Communication, I want information about Aadhaar Mobile Number Update."],
-    ["srv-aadhaar-corr", "Aadhaar Correction & Address Update", "आधार सुधार एवं पता बदलाव", "Aadhaar", "Name, DOB, gender, or address correction in your existing Aadhaar card with valid proof.", "आधार कार्ड में नाम, जन्मतिथि, लिंग अथवा पते में सुधार के लिए उचित दस्तावेजों के साथ आवेदन।", "Get corrections in demographic details updated in UIDAI database.", "UIDAI नियमों के अनुसार आधार कार्ड में नाम, पिता/पति का नाम, जन्मतिथि एवं आवासीय पता ठीक कराने हेतु सहायता।", "Existing Aadhaar Card copy\\nProof of Identity / Address", "UserCheck", "Active", "yes", "3-7 Working Days", "Hello Balaji Communication, I want information about Aadhaar Correction."],
-    ["srv-aadhaar-down", "Aadhaar Download & PVC Card Print", "आधार कार्ड डाउनलोड एवं पीवीसी कार्ड प्रिंट", "Aadhaar", "Instant e-Aadhaar PDF download and ordering durable plastic PVC Aadhaar card.", "तुरंत ई-आधार डाउनलोड और वॉटरप्रूफ सुरक्षित पीवीसी (प्लास्टिक) कार्ड बनवाने की सुविधा।", "Lost your physical Aadhaar card? Get high-quality e-Aadhaar downloaded instantly through OTP.", "यदि आधार खो गया है, तो तुरंत ओटीपी के माध्यम से ई-आधार डाउनलोड कराएं या पीवीसी प्लास्टिक कार्ड मंगवाएं।", "Aadhaar Number or Enrollment ID\\nRegistered Mobile Phone", "CreditCard", "Active", "yes", "Instant Download / 7-10 days Speed Post", "Hello Balaji Communication, I want information about Aadhaar Download and PVC Card."],
-    ["srv-ration-new", "New Ration Card Application", "नया राशन कार्ड ऑनलाइन आवेदन", "Ration Card", "Assistance in applying for new APL/BPL/Antyodaya ration cards for eligible families.", "पात्र परिवारों के लिए नया राशन कार्ड ऑनलाइन अप्लाई करने में सहायता।", "Complete documentation and online portal registration for fresh ration card applications.", "परिवार के सभी सदस्यों के विवरण, आधार एवं आय प्रमाण पत्र के साथ नए राशन कार्ड के लिए आवेदन।", "Head of Family Aadhaar & Photo\\nFamily Aadhaar copies\\nIncome Certificate\\nBank Passbook", "FileSpreadsheet", "Active", "yes", "15-30 Working Days", "Hello Balaji Communication, I want information about New Ration Card Apply."],
-    ["srv-ration-corr", "Ration Card Correction & Member Add/Remove", "राशन कार्ड संशोधन एवं यूनिट जोड़ना/हटाना", "Ration Card", "Add new family member/child, remove married member, or correct names in ration card.", "राशन कार्ड में नए बच्चे/सदस्य का नाम जोड़ना, नाम हटाना अथवा गलतियों में सुधार।", "Online submission for adding newborn children or daughters-in-law into existing ration cards.", "विवाह के पश्चात नई बहू का नाम जोड़ना या नवजात शिशु की यूनिट जोड़ने की ऑनलाइन प्रक्रिया।", "Original Ration Card Number\\nNew member Aadhaar / Birth Certificate", "Users", "Active", "no", "10-20 Working Days", "Hello Balaji Communication, I want information about Ration Card Member Addition."],
-    ["srv-pmkisan-reg", "PM Kisan Samman Nidhi Registration", "पीएम किसान सम्मान निधि नया पंजीकरण", "PM Kisan", "New farmer enrollment to receive ₹6,000 yearly direct benefit from Government of India.", "पात्र किसान भाइयों के लिए सालाना ₹6,000 सहायता प्राप्त करने हेतु नया ऑनलाइन पंजीकरण।", "Assistance for small and marginal farmer families to register under PM-KISAN scheme.", "पीएम-किसान योजना के अंतर्गत किसानों का ऑनलाइन रजिस्ट्रेशन, खतौनी भूलेख विवरण दर्ज करना।", "Farmer Aadhaar Card\\nKhatauni Land Record\\nBank Passbook\\nMobile linked with Aadhaar", "Tractor", "Active", "yes", "Departmental Verification", "Hello Balaji Communication, I want information about PM Kisan Registration."],
-    ["srv-pmkisan-kyc", "PM Kisan e-KYC & Status Check", "पीएम किसान ई-केवाईसी एवं किस्त स्थिति जांच", "PM Kisan", "Mandatory OTP/Biometric e-KYC to ensure continuous payment of PM Kisan installments.", "किस्त न रुकने पाए इसके लिए बायोमेट्रिक या आधार ओटीपी से तुरंत ई-केवाईसी करवाएं।", "If your PM-Kisan installment is stuck due to pending eKYC or land seeding, visit our center.", "अटकी हुई किस्तें चालू कराने और ई-केवाईसी फिंगरप्रिंट या ओटीपी द्वारा तुरंत पूर्ण कराने की सेवा।", "Aadhaar Card\\nAadhaar Registered Mobile", "ShieldCheck", "Active", "yes", "Instant (5 Minutes)", "Hello Balaji Communication, I want information about PM Kisan e-KYC."],
-    ["srv-ayushman-card", "Ayushman Card Apply & Download", "आयुष्मान भारत गोल्डन कार्ड (₹5 लाख मुफ्त इलाज)", "Ayushman", "Check eligibility under PM-JAY and apply/download your cashless hospital treatment card.", "प्रतिवर्ष ₹5 लाख तक के मुफ्त इलाज हेतु आयुष्मान भारत कार्ड की पात्रता जांच, आवेदन व डाउनलोड।", "Eligible families get cashless treatment up to ₹5 lakh per year in empanelled hospitals.", "पात्रता सूची या राशन कार्ड के आधार पर आयुष्मान कार्ड केवाईसी, नाम सर्च और तुरंत ओरिजिनल आयुष्मान पीवीसी कार्ड प्रिंट।", "Aadhaar Card\\nRation Card or PM-JAY letter\\nMobile Phone for OTP", "HeartPulse", "Active", "yes", "Instant verification / 24-48 Hours Approval", "Hello Balaji Communication, I want information about Ayushman Card."],
-    ["srv-voter-id", "Voter ID / पहचान पत्र Apply & Correction", "वोटर आईडी (पहचान पत्र) नया आवेदन एवं संशोधन", "Voter ID", "New voter registration (Form 6), address shift (Form 8), and digital e-EPIC download.", "18 वर्ष पूर्ण होने पर नया पहचान पत्र बनवाना, पता बदलना या डिजिटल वोटर कार्ड डाउनलोड।", "Assistance on Election Commission of India (ECI) portal to apply for fresh voter ID card.", "भारत निर्वाचन आयोग के पोर्टल पर फॉर्म 6 द्वारा नया पहचान पत्र आवेदन एवं संशोधन।", "Passport Photo\\nAge Proof\\nAddress Proof", "Vote", "Active", "yes", "15-30 Days", "Hello Balaji Communication, I want information about Voter ID application."],
-    ["srv-pan-card", "PAN Card Apply & Correction", "नया पैन कार्ड आवेदन एवं सुधार", "PAN Card", "New Instant e-PAN, minor PAN card, or correction in name/father's name.", "नया पैन कार्ड (वयस्क/नाबालिग), खोए हुए पैन को दोबारा प्राप्त करना या नाम सुधार।", "Online submission via NSDL / UTIITSL for new PAN allocation or updating details.", "NSDL / UTIITSL पोर्टल के माध्यम से नया पैन कार्ड आवेदन। 2 से 3 दिन में ई-पैन एवं स्पीड पोस्ट द्वारा घर पर ओरिजिनल कार्ड।", "Aadhaar Card\\nTwo Passport Photos", "BadgePercent", "Active", "yes", "2-3 Days e-PAN / 10-15 Days physical card", "Hello Balaji Communication, I want information about PAN Card application."],
-    ["srv-income-cert", "Income Certificate (आय प्रमाण पत्र)", "आय प्रमाण पत्र ऑनलाइन आवेदन", "Certificates", "Government issued income certificate for student scholarships, fee concession, and schemes.", "छात्रवृत्ति, स्कूल-कॉलेज प्रवेश एवं सरकारी योजनाओं हेतु अधिकृत आय प्रमाण पत्र।", "Assistance on state e-District portal for applying and downloading Tehsildar verified certificate.", "ई-डिस्ट्रिक्ट पोर्टल के माध्यम से स्वप्रमाणित घोषणा पत्र के साथ आय प्रमाण पत्र का आवेदन।", "Aadhaar Card\\nSelf-Declaration Form\\nSalary/Gram Pradhan report\\nPhoto", "FileCheck2", "Active", "yes", "7-15 Working Days", "Hello Balaji Communication, I want information about Income Certificate."],
-    ["srv-caste-cert", "Caste Certificate (जाति प्रमाण पत्र)", "जाति प्रमाण पत्र (SC / ST / OBC / EWS)", "Certificates", "Official caste certificate for competitive examinations, reservations, and state benefits.", "सरकारी नौकरियों, आरक्षण एवं उच्च शिक्षा में लाभ हेतु अधिकृत जाति प्रमाण पत्र।", "State and Central format caste certificates application with proper revenue validation.", "राज्य एवं केंद्र सरकार के प्रारूप में एससी, एसटी, ओबीसी एवं ईडब्ल्यूएस प्रमाण पत्र का ऑनलाइन आवेदन।", "Aadhaar Card\\nOld family caste proof / registry\\nSelf-Declaration\\nPhoto", "Award", "Active", "no", "7-15 Working Days", "Hello Balaji Communication, I want information about Caste Certificate."],
-    ["srv-residence-cert", "Residence / Domicile Certificate (निवास प्रमाण पत्र)", "मूल निवास प्रमाण पत्र ऑनलाइन आवेदन", "Certificates", "Valid proof of permanent residence for admissions, government jobs, and police verification.", "स्थानीय निवासी होने का कानूनी प्रमाण पत्र, जो नौकरियों एवं प्रवेश में अनिवार्य है।", "Apply for official Domicile (Niwas Praman Patra) through e-District platform.", "तहसीलदार स्तर से सत्यापित डिजिटल हस्ताक्षरित मूल निवास प्रमाण पत्र के लिए ऑनलाइन आवेदन।", "Aadhaar Card\\nElectricity Bill / Voter ID\\nPhoto", "Home", "Active", "no", "7-15 Working Days", "Hello Balaji Communication, I want information about Residence / Domicile Certificate."],
-    ["srv-birth-cert", "Birth Certificate Assistance (जन्म प्रमाण पत्र)", "जन्म प्रमाण पत्र ऑनलाइन सहायता", "Certificates", "Assistance in applying for municipal birth certificate for new-borns and delayed registrations.", "नगर निगम / ब्लॉक स्तर पर नवजात बच्चों अथवा छूटे हुए जन्म प्रमाण पत्र के लिए मार्गदर्शन।", "Civil Registration System (CRS) application filing and hospital discharge slip submission.", "सीआरएस पोर्टल पर जन्म पंजीकरण एवं अस्पताल की डिस्चार्ज स्लिप के साथ आवेदन।", "Hospital Discharge Slip\\nParents Aadhaar\\nMarriage proof", "Baby", "Active", "no", "10-21 Working Days", "Hello Balaji Communication, I want information about Birth Certificate."],
-    ["srv-online-forms", "Online Form Filling & Govt Job Applications", "सरकारी नौकरी फॉर्म एवं ऑनलाइन फॉर्म फिलिंग", "Other Digital Services", "Error-free form filling for SSC, Police, Railway, UPSC, Teaching, and college admissions.", "एसएससी, रेलवे, पुलिस, शिक्षक भर्ती, नीट, जेईई एवं अन्य प्रतियोगी परीक्षाओं के सही फॉर्म।", "Professional form submission with exact photo & signature resizing, document scanning, fee payment receipt generation.", "सटीक फोटो/हस्ताक्षर साइजिंग, योग्यता विवरण प्रविष्टि, सुरक्षित ऑनलाइन फीस भुगतान और प्रिंट आउट।", "Educational Marksheets\\nClear photo & signature\\nAadhaar Card", "FileText", "Active", "yes", "Immediate submission with receipt", "Hello Balaji Communication, I want information about Online Form Filling."],
-    ["srv-print-scan", "Print, Scan, Photocopy & Passport Photos", "प्रिंट, स्कैन, फोटोकॉपी एवं तत्काल पासपोर्ट साइज फोटो", "Other Digital Services", "High-resolution color printing, document lamination, and instant 5-minute passport photos.", "हाई-क्वालिटी रंगीन व ब्लैक-व्हाइट प्रिंट, दस्तावेज लैमिनेशन एवं 5 मिनट में पासपोर्ट फोटो।", "Walk-in facilities for high-speed laser printing from WhatsApp/Email/Pen-drive, crisp scanning to PDF.", "व्हाट्सएप, ईमेल अथवा पेनड्राइव से तुरंत प्रिंट, सभी प्रकार के कागजातों की फोटोकॉपी एवं लैमिनेशन।", "Original Document or Soft copy", "Printer", "Active", "no", "Instant Walk-in (2-5 Minutes)", "Hello Balaji Communication, I want to print or scan documents."]
-  ];
-  for (var sIdx = 0; sIdx < defaultServices.length; sIdx++) {
-    srvSheet.appendRow(defaultServices[sIdx]);
-  }
-  formatHeaderRow(srvSheet, "#1E3A8A");
-
-  // 2. ENQUIRIES TAB (Header only - clean register ready for real citizen submissions, NO mock/test data)
-  var enqSheet = getOrCreateSheet(ss, "Enquiries");
-  if (enqSheet.getLastRow() === 0) {
-    enqSheet.appendRow([
-      "enquiry_id", "customer_name", "father_or_husband_name", "mobile", "service_name",
-      "category", "village", "address", "message", "preferred_contact", "urgency", "status", "created_at"
-    ]);
-  }
-  formatHeaderRow(enqSheet, "#065F46");
-
-  // 3. PRICELIST TAB (Transparent CSC Government Fee & Kendra Rate Card)
-  var prcSheet = getOrCreateSheet(ss, "PriceList");
-  prcSheet.clearContents();
-  prcSheet.appendRow([
-    "price_id", "service_name", "category", "government_fee", "csc_service_fee",
-    "total_fee", "processing_time", "eligibility_or_note", "status"
-  ]);
-  var defaultPrices = [
-    ["PRC-001", "Aadhaar Mobile Number Update", "Aadhaar Services", "₹50", "₹30", "₹80", "24 to 48 Hours", "UIDAI biometric update fee + Kendra verification assistance", "Active"],
-    ["PRC-002", "Income / Caste / Domicile Certificate", "Revenue & eDistrict UP", "₹15", "₹35", "₹50", "7 to 10 Days", "Official UP Govt treasury challan + online application & scanning", "Active"],
-    ["PRC-003", "New PAN Card (Physical Delivery to Home)", "NSDL / UTI Services", "₹107", "₹93", "₹200", "10 to 15 Days", "NSDL official fee + biometric e-KYC and Speed Post plastic card", "Active"],
-    ["PRC-004", "Ayushman Bharat Golden Card Print", "Health Mission", "₹0 (Govt Free)", "₹30", "₹30", "Instant 5 Mins", "Government subsidy is free; High-grade waterproof PVC print charge", "Active"],
-    ["PRC-005", "PM Kisan Samman Nidhi e-KYC", "Agriculture Services", "₹0 (Govt Free)", "₹20", "₹20", "Instant Thumb Scan", "Biometric thumb authentication machine and portal server charge", "Active"],
-    ["PRC-006", "New Ration Card Application", "Food & Civil Supplies", "₹0 (Govt Free)", "₹60", "₹60", "15 to 30 Days", "Online FCS portal filing, unit registration and document upload", "Active"],
-    ["PRC-007", "Voter ID New Registration / Correction", "Election Commission", "₹0 (Govt Free)", "₹40", "₹40", "15 to 30 Days", "Form 6 / Form 8 application filing with BLO follow-up guidance", "Active"],
-    ["PRC-008", "PVC Smart Plastic Card Print (Aadhaar / Voter / PAN)", "Digital Print Services", "₹0", "₹50", "₹50", "Instant 5 Mins", "High definition UV waterproof smart PVC plastic card printing", "Active"]
-  ];
-  for (var pIdx = 0; pIdx < defaultPrices.length; pIdx++) {
-    prcSheet.appendRow(defaultPrices[pIdx]);
-  }
-  formatHeaderRow(prcSheet, "#7C2D12");
-
-  // 4. NOTICE BOARD TAB (Live scheme announcements & deadlines)
-  var ntcSheet = getOrCreateSheet(ss, "NoticeBoard");
-  ntcSheet.clearContents();
-  ntcSheet.appendRow([
-    "notice_id", "title_en", "title_hi", "description_en", "description_hi",
-    "category", "badge_type", "last_date", "action_link", "status", "created_at"
-  ]);
-  var defaultNotices = [
-    ["NTC-001", "PM Kisan 19th Installment e-KYC Mandatory", "पीएम किसान 19वीं किस्त हेतु बायोमेट्रिक ई-केवाईसी अनिवार्य", "Farmers who have not completed biometric e-KYC must visit Balaji Communication to avoid installment blockage.", "जिन किसान भाइयों की ई-केवाईसी पूरी नहीं है, वे अपनी आगामी किस्त पाने के लिए तुरंत केंद्र पर आकर फिंगरप्रिंट से ई-केवाईसी कराएं।", "PM Kisan", "Urgent", "31-03-2026", "/services", "Active", new Date().toISOString()],
-    ["NTC-002", "UP Scholarship 2026 Pre & Post Matric Applications Open", "यूपी छात्रवृत्ति 2026 दशमोत्तर एवं पूर्वदशम आवेदन प्रारंभ", "Apply online with Marksheet, Income Certificate, Caste Certificate, and Bank Passbook linked with NPCI.", "कक्षा 9, 10, 11, 12 एवं बीए, बीएससी, आईटीआई छात्रवृत्ति के नए एवं नवीनीकरण फॉर्म भरने हेतु संपर्क करें।", "Education & Scholarship", "New", "15-05-2026", "/contact", "Active", new Date().toISOString()],
-    ["NTC-003", "Free Aadhaar Document Update Extended by UIDAI", "मुफ्त आधार कार्ड दस्तावेज अपडेट सुविधा का लाभ उठाएं", "UIDAI has extended online proof of identity and address update for cards older than 10 years.", "जिनका आधार कार्ड 10 वर्ष से अधिक पुराना है, वे अपनी पहचान एवं पते का प्रमाण तुरंत अपडेट करवाएं।", "Aadhaar Alert", "Important", "30-06-2026", "/services", "Active", new Date().toISOString()]
-  ];
-  for (var nIdx = 0; nIdx < defaultNotices.length; nIdx++) {
-    ntcSheet.appendRow(defaultNotices[nIdx]);
-  }
-  formatHeaderRow(ntcSheet, "#92400E");
-
-  // 5. QUICK LINKS TAB (Direct Official Portals Directory)
-  var lnkSheet = getOrCreateSheet(ss, "QuickLinks");
-  lnkSheet.clearContents();
-  lnkSheet.appendRow([
-    "link_id", "portal_name", "department", "category", "portal_url",
-    "description", "portal_login_type", "required_credentials"
-  ]);
-  var defaultLinks = [
-    ["LNK-001", "e-District Uttar Pradesh (ई-डिस्ट्रिक्ट)", "Revenue & IT Department UP", "Certificates", "https://edistrict.up.gov.in", "Official UP portal for Income, Caste, Domicile, Birth certificates.", "CSC Operator / Citizen Login", "Kendra Operator ID / OTP"],
-    ["LNK-002", "UIDAI Official MyAadhaar Portal", "Ministry of Electronics and IT", "Aadhaar Services", "https://myaadhaar.uidai.gov.in", "Download e-Aadhaar, PVC card order, check update status.", "Citizen Aadhaar OTP / Biometric", "Aadhaar Number + Registered Mobile"],
-    ["LNK-003", "UP Bhulekh Land Records (भूलेख खतौनी)", "Board of Revenue Uttar Pradesh", "Land Records", "https://upbhulekh.gov.in", "View and print authenticated RoR Khatauni, Gata number details.", "Open Public Search / Certified Copy", "District, Tehsil, Village Code, Gata/Khasra No"],
-    ["LNK-004", "National Voter Service Portal (ECI Voters)", "Election Commission of India", "Voter ID", "https://voters.eci.gov.in", "New Form 6 voter enrollment, Form 8 correction, EPIC download.", "Mobile Login / ECI User", "EPIC Voter Number / Mobile OTP"],
-    ["LNK-005", "PM Kisan Samman Nidhi Portal", "Ministry of Agriculture & Farmers Welfare", "Agriculture", "https://pmkisan.gov.in", "Beneficiary status check, biometric e-KYC, land correction.", "CSC Login / Farmer Self Service", "Aadhaar / Farmer Registration Number"]
-  ];
-  for (var lIdx = 0; lIdx < defaultLinks.length; lIdx++) {
-    lnkSheet.appendRow(defaultLinks[lIdx]);
-  }
-  formatHeaderRow(lnkSheet, "#4C1D95");
-
-  // 6. CITIZENS REGISTRY TAB (Header only - clean customer master directory, NO mock/test citizens)
-  var citSheet = getOrCreateSheet(ss, "Citizens");
-  if (citSheet.getLastRow() === 0) {
-    citSheet.appendRow([
-      "citizen_id", "full_name", "father_name", "mobile", "aadhaar_last4",
-      "village", "address", "services_availed", "notes", "status", "created_at"
-    ]);
-  }
-  formatHeaderRow(citSheet, "#1F2937");
-
-  // 7. SETTINGS TAB (Balaji Communication Center Info)
-  var setSheet = getOrCreateSheet(ss, "Settings");
-  setSheet.clearContents();
-  setSheet.appendRow(["Key", "Value"]);
-  setSheet.appendRow(["business_name_en", "Balaji Communication"]);
-  setSheet.appendRow(["business_name_hi", "बालाजी कम्युनिकेशन"]);
-  setSheet.appendRow(["phone_number", "+919870677605"]);
-  setSheet.appendRow(["whatsapp_number", "919870677605"]);
-  setSheet.appendRow(["email", "vikkysingh9870677605@gmail.com"]);
-  setSheet.appendRow(["address_en", "Shop, Masjid bali gali, Inter college road Gaini, Bareilly, Uttar Pradesh - 243302"]);
-  setSheet.appendRow(["address_hi", "दुकान, मस्जिद वाली गली, इंटर कॉलेज रोड, गैनी, बरेली, उत्तर प्रदेश - 243302"]);
-  formatHeaderRow(setSheet, "#374151");
-
-  SpreadsheetApp.flush();
-}
-
-function getOrCreateSheet(ss, name) {
-  var sheet = ss.getSheetByName(name);
-  if (!sheet) {
-    sheet = ss.insertSheet(name);
-  }
-  return sheet;
-}
-
-function formatHeaderRow(sheet, bgColor) {
-  var range = sheet.getRange(1, 1, 1, sheet.getLastColumn() || 1);
-  range.setBackground(bgColor);
-  range.setFontColor("#FFFFFF");
-  range.setFontWeight("bold");
-  sheet.setFrozenRows(1);
-}
-
-// ================= READ DATA FUNCTIONS =================
+// =========================================================================
+// 4. READ DATA FUNCTIONS
+// =========================================================================
 function getServicesList() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet();
   var sheet = ss.getSheetByName("Services");
   if (!sheet) {
     try {
@@ -363,7 +443,7 @@ function getServicesList() {
 }
 
 function getEnquiriesList() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet();
   var sheet = ss.getSheetByName("Enquiries");
   if (!sheet) return [];
   var data = sheet.getDataRange().getValues();
@@ -392,7 +472,7 @@ function getEnquiriesList() {
 }
 
 function getPriceListData() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet();
   var sheet = ss.getSheetByName("PriceList");
   if (!sheet) return [];
   var data = sheet.getDataRange().getValues();
@@ -417,7 +497,7 @@ function getPriceListData() {
 }
 
 function getNoticesData() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet();
   var sheet = ss.getSheetByName("NoticeBoard");
   if (!sheet) return [];
   var data = sheet.getDataRange().getValues();
@@ -444,7 +524,7 @@ function getNoticesData() {
 }
 
 function getQuickLinksData() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet();
   var sheet = ss.getSheetByName("QuickLinks");
   if (!sheet) return [];
   var data = sheet.getDataRange().getValues();
@@ -468,7 +548,7 @@ function getQuickLinksData() {
 }
 
 function getCitizensData() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet();
   var sheet = ss.getSheetByName("Citizens");
   if (!sheet) return [];
   var data = sheet.getDataRange().getValues();
@@ -495,7 +575,7 @@ function getCitizensData() {
 }
 
 function getSettingsData() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet();
   var sheet = ss.getSheetByName("Settings");
   if (!sheet) return {};
   var data = sheet.getDataRange().getValues();
@@ -508,9 +588,11 @@ function getSettingsData() {
   return settings;
 }
 
-// ================= WRITE / APPEND FUNCTIONS =================
+// =========================================================================
+// 5. WRITE & APPEND FUNCTIONS
+// =========================================================================
 function addEnquiry(data) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet();
   var sheet = getOrCreateSheet(ss, "Enquiries");
   if (sheet.getLastRow() === 0) {
     sheet.appendRow([
@@ -521,7 +603,7 @@ function addEnquiry(data) {
   }
   var id = data.enquiry_id || ("ENQ-" + Utilities.getUuid().substring(0, 8).toUpperCase());
   
-  // Deduplication check: Avoid inserting identical enquiry twice if sent by both client and server
+  // Deduplication check: Avoid inserting identical enquiry twice
   var lastRow = sheet.getLastRow();
   if (lastRow > 1) {
     var existingIds = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
@@ -553,7 +635,7 @@ function addEnquiry(data) {
 }
 
 function addService(service) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet();
   var sheet = getOrCreateSheet(ss, "Services");
   if (sheet.getLastRow() === 0) {
     sheet.appendRow([
@@ -564,7 +646,7 @@ function addService(service) {
     formatHeaderRow(sheet, "#1E3A8A");
   }
   var id = service.service_id || ("srv-" + Utilities.getUuid().substring(0, 8));
-  var docsStr = Array.isArray(service.required_documents) ? service.required_documents.join("\n") : (service.required_documents || "");
+  var docsStr = Array.isArray(service.required_documents) ? service.required_documents.join("\\n") : (service.required_documents || "");
 
   // Upsert check: If row exists with same service_id, update it
   var lastRow = sheet.getLastRow();
@@ -613,14 +695,14 @@ function addService(service) {
 }
 
 function updateService(service) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet();
   var sheet = ss.getSheetByName("Services");
-  if (!sheet) return { status: "error", message: "Sheet not found" };
+  if (!sheet) return { status: "error", message: "Services sheet not found" };
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][0]).trim().toUpperCase() === String(service.service_id).trim().toUpperCase()) {
       var row = i + 1;
-      var docsStr = Array.isArray(service.required_documents) ? service.required_documents.join("\n") : service.required_documents;
+      var docsStr = Array.isArray(service.required_documents) ? service.required_documents.join("\\n") : service.required_documents;
       sheet.getRange(row, 2).setValue(service.service_name_en);
       sheet.getRange(row, 3).setValue(service.service_name_hi);
       sheet.getRange(row, 4).setValue(service.category);
@@ -638,13 +720,13 @@ function updateService(service) {
       return { status: "success" };
     }
   }
-  return { status: "error", message: "Service not found" };
+  return { status: "error", message: "Service not found: " + service.service_id };
 }
 
 function deleteService(serviceId) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet();
   var sheet = ss.getSheetByName("Services");
-  if (!sheet) return { status: "error", message: "Sheet not found" };
+  if (!sheet) return { status: "error", message: "Services sheet not found" };
   var data = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][0]).trim().toUpperCase() === String(serviceId).trim().toUpperCase()) {
@@ -653,11 +735,11 @@ function deleteService(serviceId) {
       return { status: "success" };
     }
   }
-  return { status: "error", message: "Not found" };
+  return { status: "error", message: "Service ID not found: " + serviceId };
 }
 
 function updateEnquiryStatus(enquiryId, newStatus) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet();
   var sheet = ss.getSheetByName("Enquiries");
   if (!sheet) return { status: "error", message: "Enquiries sheet not found" };
   var data = sheet.getDataRange().getValues();
@@ -671,8 +753,69 @@ function updateEnquiryStatus(enquiryId, newStatus) {
   return { status: "error", message: "Enquiry ID not found: " + enquiryId };
 }
 
+function savePriceListItem(item) {
+  var ss = getSpreadsheet();
+  var sheet = getOrCreateSheet(ss, "PriceList");
+  var id = item.price_id || ("PRC-" + Utilities.getUuid().substring(0, 6).toUpperCase());
+  sheet.appendRow([
+    id,
+    item.service_name || "",
+    item.category || "General",
+    item.government_fee || "₹0",
+    item.csc_service_fee || item.center_fee || "₹0",
+    item.total_fee || "₹0",
+    item.processing_time || item.estimated_delivery || "1-3 Days",
+    item.eligibility_or_note || item.notes || "",
+    item.status || "Active"
+  ]);
+  SpreadsheetApp.flush();
+  return { status: "success", price_id: id };
+}
+
+function saveNoticeItem(item) {
+  var ss = getSpreadsheet();
+  var sheet = getOrCreateSheet(ss, "NoticeBoard");
+  var id = item.notice_id || ("NTC-" + Utilities.getUuid().substring(0, 6).toUpperCase());
+  sheet.appendRow([
+    id,
+    item.title_en || item.title || "",
+    item.title_hi || item.title || "",
+    item.description_en || item.description || "",
+    item.description_hi || item.description || "",
+    item.category || "General",
+    item.badge_type || item.priority || "Important",
+    item.last_date || item.date || "",
+    item.action_link || item.action_url || "",
+    item.status || "Active",
+    new Date().toISOString()
+  ]);
+  SpreadsheetApp.flush();
+  return { status: "success", notice_id: id };
+}
+
+function saveCitizenItem(item) {
+  var ss = getSpreadsheet();
+  var sheet = getOrCreateSheet(ss, "Citizens");
+  var id = item.citizen_id || ("CIT-" + Utilities.getUuid().substring(0, 6).toUpperCase());
+  sheet.appendRow([
+    id,
+    item.full_name || "",
+    item.father_name || "",
+    item.mobile || "",
+    item.aadhaar_last4 || "",
+    item.village || "",
+    item.address || "",
+    item.services_availed || "",
+    item.notes || "",
+    item.status || "Active",
+    new Date().toISOString()
+  ]);
+  SpreadsheetApp.flush();
+  return { status: "success", citizen_id: id };
+}
+
 function saveSettingsData(settingsObj) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet();
   var sheet = getOrCreateSheet(ss, "Settings");
   sheet.clearContents();
   sheet.appendRow(["Key", "Value"]);

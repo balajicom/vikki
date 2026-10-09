@@ -2203,15 +2203,15 @@ export const AdminDashboard: React.FC = () => {
                   <div className="w-6 h-6 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center">1</div>
                   <h4 className="font-bold text-white text-sm">Create New Sheet & Open Script</h4>
                   <p className="text-slate-400 text-[11px] leading-relaxed">
-                    Open <a href="https://sheets.new" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-semibold">sheets.new</a>, then click <strong>Extensions &gt; Apps Script</strong>. Delete any blank code.
+                    Open <a href="https://sheets.new" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-semibold">sheets.new</a>, then click <strong>Extensions &gt; Apps Script</strong>. (Important: Do not use script.google.com directly; open it from inside your spreadsheet).
                   </p>
                 </div>
 
                 <div className="p-4 rounded-xl bg-slate-800/80 border border-slate-700 space-y-2">
                   <div className="w-6 h-6 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center justify-center">2</div>
-                  <h4 className="font-bold text-white text-sm">Paste Code.gs & Run Setup</h4>
+                  <h4 className="font-bold text-white text-sm">Paste Code.gs & Click Run</h4>
                   <p className="text-slate-400 text-[11px] leading-relaxed">
-                    Paste the script below. From the toolbar function dropdown, select <strong>setupAllTemplateSheets</strong> and click <strong>Run</strong>. All 7 tabs will be created instantly with headers and sample data!
+                    Delete any blank code, paste the script below, click 💾 <strong>Save</strong>, then click ▶ <strong>Run</strong>. When prompted for permissions, click <strong>Review permissions &gt; Advanced &gt; Go to (unsafe) &gt; Allow</strong>. All 7 tabs are created in 2 seconds!
                   </p>
                 </div>
 

@@ -1,14 +1,14 @@
 {
   "services": [
     {
-      "service_id": "srv-mv0gtcmf",
-      "service_name_en": "RECHARGE",
-      "service_name_hi": "RECHARGE",
+      "service_id": "srv-mv0hwmu7",
+      "service_name_en": "GOOGLE",
+      "service_name_hi": "GOOGLE",
       "category": "All",
-      "short_description_en": "RECHARGE",
-      "short_description_hi": "RECHARGE",
-      "full_description_en": "RECHARGE",
-      "full_description_hi": "RECHARGE",
+      "short_description_en": "GOOGLE",
+      "short_description_hi": "GOOGLE",
+      "full_description_en": "GOOGLE",
+      "full_description_hi": "GOOGLE",
       "required_documents": [
         "Original Aadhaar Card",
         "Registered Mobile Number"
@@ -17,9 +17,9 @@
       "status": "Active",
       "popular": true,
       "estimated_time": "1 to 3 Working Days",
-      "whatsapp_message": "Hello Balaji Communication, I want information about RECHARGE.",
-      "created_at": "2026-10-09T04:28:43.879Z",
-      "updated_at": "2026-10-09T04:28:44.209Z"
+      "whatsapp_message": "Hello Balaji Communication, I want information about GOOGLE.",
+      "created_at": "2026-10-09T04:59:15.727Z",
+      "updated_at": "2026-10-09T04:59:15.742Z"
     },
     {
       "service_id": "srv-aadhaar-mob",
@@ -101,27 +101,6 @@
       "popular": true,
       "estimated_time": "Instant Biometric / 7 Days Approval",
       "whatsapp_message": "Hello Balaji Communication, I need help with PM Kisan e-KYC and installment."
-    },
-    {
-      "service_id": "srv-mv0g676m",
-      "service_name_en": "RECHARGE",
-      "service_name_hi": "RECHARGE",
-      "category": "All",
-      "short_description_en": "RECHARGE",
-      "short_description_hi": "RECHARGE",
-      "full_description_en": "RECHARGE",
-      "full_description_hi": "RECHARGE",
-      "required_documents": [
-        "Original Aadhaar Card",
-        "Registered Mobile Number"
-      ],
-      "icon": "CreditCard",
-      "status": "Active",
-      "popular": true,
-      "estimated_time": "1 to 3 Working Days",
-      "whatsapp_message": "Hello Balaji Communication, I want information about RECHARGE.",
-      "created_at": "2026-10-09T04:10:46.021Z",
-      "updated_at": "2026-10-09T04:10:47.023Z"
     },
     {
       "service_id": "srv-muj4xqyz",
@@ -459,24 +438,6 @@
   ],
   "enquiries": [
     {
-      "enquiry_id": "BALAJI-APP-MV0GRHCJ",
-      "customer_name": "Rohit gupta",
-      "applicant_name": "Rohit gupta",
-      "mobile": "2546585424",
-      "father_or_husband_name": "Suresh gupta",
-      "address": "BLY",
-      "village": "Gaini",
-      "service_id": "srv-aadhaar-mob",
-      "service_name": "आधार मोबाइल नंबर अपडेट / जोड़ना",
-      "category": "Aadhaar",
-      "message": "",
-      "preferred_contact": "WhatsApp",
-      "status": "New",
-      "urgency": "Normal",
-      "created_at": "2026-10-09T04:26:58.918Z",
-      "updated_at": "2026-10-09T04:26:58.918Z"
-    },
-    {
       "enquiry_id": "ENQ-2026-001",
       "customer_name": "Ramesh Chandra Gangwar",
       "father_or_husband_name": "Shri Ram Prasad Gangwar",
@@ -520,6 +481,66 @@
       "urgency": "High Priority",
       "status": "Completed",
       "created_at": "2026-03-23T09:00:00.000Z"
+    },
+    {
+      "enquiry_id": "TEST-LIVE-MV0H2KIW",
+      "customer_name": "Test Verification Citizen",
+      "father_or_husband_name": "Shri Balaji Test",
+      "mobile": "9870677605",
+      "service_name": "GitHub Live Table Verification Test",
+      "category": "System Test",
+      "village": "Gaini",
+      "address": "Masjid Bali Gali, Inter College Road Gaini, Bareilly",
+      "message": "Direct verification test sent from Balaji Admin Dashboard to confirm that applications go into the Google Sheet \"Enquiries\" table on GitHub Live.",
+      "preferred_contact": "WhatsApp",
+      "urgency": "Normal",
+      "status": "New",
+      "created_at": "2026-10-09T04:35:30.726Z"
+    },
+    {
+      "enquiry_id": "TEST-LIVE-MV0H2KIW",
+      "customer_name": "Test Verification Citizen",
+      "father_or_husband_name": "Shri Balaji Test",
+      "mobile": "9870677605",
+      "service_name": "GitHub Live Table Verification Test",
+      "category": "System Test",
+      "village": "Gaini",
+      "address": "Masjid Bali Gali, Inter College Road Gaini, Bareilly",
+      "message": "Direct verification test sent from Balaji Admin Dashboard to confirm that applications go into the Google Sheet \"Enquiries\" table on GitHub Live.",
+      "preferred_contact": "WhatsApp",
+      "urgency": "Normal",
+      "status": "New",
+      "created_at": "2026-10-09T04:35:30.797Z"
+    },
+    {
+      "enquiry_id": "BALAJI-APP-MV0H6857",
+      "customer_name": "AMAN",
+      "father_or_husband_name": "RAJAT",
+      "mobile": "9870967117",
+      "service_name": "Ayushman Card Apply & Download",
+      "category": "Ayushman",
+      "village": "",
+      "address": "GAINI BAREILLY UP",
+      "message": "",
+      "preferred_contact": "WhatsApp",
+      "urgency": "Normal",
+      "status": "New",
+      "created_at": "2026-10-09T04:38:21.330Z"
+    },
+    {
+      "enquiry_id": "BALAJI-APP-MV0H6857",
+      "customer_name": "AMAN",
+      "father_or_husband_name": "RAJAT",
+      "mobile": "9870967117",
+      "service_name": "Ayushman Card Apply & Download",
+      "category": "Ayushman",
+      "village": "",
+      "address": "GAINI BAREILLY UP",
+      "message": "",
+      "preferred_contact": "WhatsApp",
+      "urgency": "Normal",
+      "status": "New",
+      "created_at": "2026-10-09T04:38:21.612Z"
     }
   ],
   "settings": {
@@ -547,7 +568,7 @@
     "footer_text_en": "Balaji Communication is an independent digital service assistance center and is not an official government website. All government services are subject to rules of the respective departments.",
     "google_sheet_webapp_url": "https://script.google.com/macros/s/AKfycbxLEmvUZoP7ZrKfzXKbvfu3GAh4hT7tQ0UVp-HajL4pjfgjBOzHtzJFTvW14mZstoHQ/exec",
     "google_sheet_url": "https://script.google.com/macros/s/AKfycbxLEmvUZoP7ZrKfzXKbvfu3GAh4hT7tQ0UVp-HajL4pjfgjBOzHtzJFTvW14mZstoHQ/exec",
-    "last_sheet_sync": "2026-10-09T04:25:07.582Z"
+    "last_sheet_sync": "2026-10-09T04:56:26.985Z"
   },
   "adminCredentials": {
     "email": "admin@balaji.com",
