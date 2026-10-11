@@ -606,22 +606,46 @@ app.post('/api/services', checkAdminAuth, async (req, res) => {
 });
 
 app.put('/api/services/:id', checkAdminAuth, (req, res) => {
-  const idx = db.services.findIndex(s => s.service_id === req.params.id);
+  const targetId = String(req.params.id || '').trim();
+  const idx = db.services.findIndex(s => s.service_id.trim().toLowerCase() === targetId.toLowerCase());
+  const body = req.body || {};
+
+  let updatedService: Service;
   if (idx === -1) {
-    return res.status(404).json({ error: "Service not found" });
+    // Upsert: Add service if not found in catalog
+    updatedService = {
+      service_id: targetId,
+      service_name_en: body.service_name_en || body.service_name_hi || 'New Service',
+      service_name_hi: body.service_name_hi || body.service_name_en || 'नई सेवा',
+      category: body.category || 'General Services',
+      short_description_en: body.short_description_en || '',
+      short_description_hi: body.short_description_hi || '',
+      full_description_en: body.full_description_en || '',
+      full_description_hi: body.full_description_hi || '',
+      required_documents: Array.isArray(body.required_documents)
+        ? body.required_documents
+        : (typeof body.required_documents === 'string' ? body.required_documents.split('\n').filter(Boolean) : ['Original Aadhaar Card']),
+      icon: body.icon || 'FileText',
+      status: body.status || 'Active',
+      popular: Boolean(body.popular),
+      estimated_time: body.estimated_time || '1 to 3 Working Days',
+      whatsapp_message: body.whatsapp_message || '',
+      created_at: body.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    db.services.unshift(updatedService);
+  } else {
+    updatedService = {
+      ...db.services[idx],
+      ...body,
+      required_documents: Array.isArray(body.required_documents)
+        ? body.required_documents
+        : (typeof body.required_documents === 'string' ? body.required_documents.split('\n').filter(Boolean) : db.services[idx].required_documents),
+      updated_at: new Date().toISOString()
+    };
+    db.services[idx] = updatedService;
   }
 
-  const body = req.body;
-  const updatedService: Service = {
-    ...db.services[idx],
-    ...body,
-    required_documents: Array.isArray(body.required_documents)
-      ? body.required_documents
-      : (typeof body.required_documents === 'string' ? body.required_documents.split('\n').filter(Boolean) : db.services[idx].required_documents),
-    updated_at: new Date().toISOString()
-  };
-
-  db.services[idx] = updatedService;
   saveDatabase(db);
 
   // If a Google Apps Script Web App URL is configured, forward service update asynchronously
@@ -648,12 +672,8 @@ app.put('/api/services/:id', checkAdminAuth, (req, res) => {
 });
 
 app.delete('/api/services/:id', checkAdminAuth, (req, res) => {
-  const initialLength = db.services.length;
-  const targetId = req.params.id;
-  db.services = db.services.filter(s => s.service_id !== targetId);
-  if (db.services.length === initialLength) {
-    return res.status(404).json({ error: "Service not found" });
-  }
+  const targetId = String(req.params.id || '').trim();
+  db.services = db.services.filter(s => s.service_id.trim().toLowerCase() !== targetId.toLowerCase());
   saveDatabase(db);
 
   // If a Google Apps Script Web App URL is configured, forward service deletion asynchronously
@@ -676,6 +696,19 @@ app.delete('/api/services/:id', checkAdminAuth, (req, res) => {
   }
 
   res.json({ success: true, message: "Service deleted successfully" });
+});
+
+// Live multi-browser sync endpoint (polls latest state)
+app.get('/api/sync-live', (req, res) => {
+  res.json({
+    success: true,
+    services: db.services,
+    settings: db.settings,
+    priceList: db.priceList || [],
+    notices: db.notices || [],
+    quickLinks: db.quickLinks || [],
+    timestamp: new Date().toISOString()
+  });
 });
 
 // 2. Categories

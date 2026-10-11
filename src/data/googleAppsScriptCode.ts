@@ -1,7 +1,7 @@
 export const GOOGLE_APPS_SCRIPT_CODE = `/**
  * =========================================================================
  * BALAJI COMMUNICATION - JAN SEVA KENDRA & CSC
- * MASTER GOOGLE APPS SCRIPT BACKEND (ALL TEMPLATES SUPPORTED)
+ * MASTER GOOGLE APPS SCRIPT BACKEND (PRODUCTION GRADE - ALL TABS SUPPORTED)
  * =========================================================================
  * 
  * QUICK SETUP GUIDE (Takes 1-2 minutes):
@@ -33,13 +33,18 @@ var SPREADSHEET_ID = "";
 
 /**
  * Robust helper to retrieve the spreadsheet whether container-bound or standalone.
+ * If running in a standalone script without an ID, it automatically creates a new
+ * Google Spreadsheet so the code NEVER throws an error!
  */
 function getSpreadsheet() {
   var ss = null;
+
+  // 1. Check container-bound active spreadsheet
   try {
     ss = SpreadsheetApp.getActiveSpreadsheet();
   } catch (e) {}
 
+  // 2. Check explicitly defined SPREADSHEET_ID
   if (!ss && SPREADSHEET_ID && SPREADSHEET_ID.trim()) {
     var raw = SPREADSHEET_ID.trim();
     var cleanId = raw;
@@ -53,6 +58,17 @@ function getSpreadsheet() {
     }
   }
 
+  // 3. Check previously stored script property
+  if (!ss) {
+    try {
+      var savedId = PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID");
+      if (savedId) {
+        ss = SpreadsheetApp.openById(savedId);
+      }
+    } catch (propErr) {}
+  }
+
+  // 4. Check active sheet parent
   if (!ss) {
     try {
       var active = SpreadsheetApp.getActiveSheet();
@@ -60,9 +76,23 @@ function getSpreadsheet() {
     } catch (e) {}
   }
 
+  // 5. AUTO-CREATE FALLBACK: If user opened standalone script without binding, create a sheet automatically!
+  if (!ss) {
+    try {
+      ss = SpreadsheetApp.create("Balaji Communication - CSC & Jan Seva Kendra Master Database");
+      var newId = ss.getId();
+      try {
+        PropertiesService.getScriptProperties().setProperty("SPREADSHEET_ID", newId);
+      } catch (saveErr) {}
+      Logger.log("Auto-created new Google Spreadsheet: " + ss.getUrl() + " (ID: " + newId + ")");
+    } catch (createErr) {
+      Logger.log("Could not auto-create spreadsheet: " + createErr.toString());
+    }
+  }
+
   if (!ss) {
     throw new Error(
-      "Spreadsheet not found! Please open this script directly from inside your Google Sheet by clicking: Extensions > Apps Script (OR paste your Spreadsheet ID/URL into SPREADSHEET_ID at line 25 of Code.gs)."
+      "Spreadsheet not found! Please open this script directly from inside your Google Sheet: Extensions > Apps Script."
     );
   }
   return ss;
@@ -75,7 +105,7 @@ function setupAllTemplateSheets() {
   var ss = getSpreadsheet();
   Logger.log("Starting setup for spreadsheet: " + ss.getName());
 
-  // 1. SERVICES TAB (Full Balaji Communication Master Service Catalog - 16 Services)
+  // 1. SERVICES TAB (Master Service Catalog)
   try {
     var srvSheet = getOrCreateSheet(ss, "Services");
     srvSheet.clearContents();
@@ -111,7 +141,7 @@ function setupAllTemplateSheets() {
     Logger.log("Services tab setup error: " + errSrv.toString());
   }
 
-  // 2. ENQUIRIES TAB (Header only - clean register ready for live citizen applications)
+  // 2. ENQUIRIES TAB (Header only - clean register ready for live applications)
   try {
     var enqSheet = getOrCreateSheet(ss, "Enquiries");
     if (enqSheet.getLastRow() === 0) {
@@ -178,24 +208,27 @@ function setupAllTemplateSheets() {
     lnkSheet.clearContents();
     lnkSheet.appendRow([
       "link_id", "portal_name", "department", "category", "portal_url",
-      "description", "portal_login_type", "required_credentials"
+      "description", "status", "is_featured"
     ]);
     var defaultLinks = [
-      ["LNK-001", "e-District Uttar Pradesh (ई-डिस्ट्रिक्ट)", "Revenue & IT Department UP", "Certificates", "https://edistrict.up.gov.in", "Official UP portal for Income, Caste, Domicile, Birth certificates.", "CSC Operator / Citizen Login", "Kendra Operator ID / OTP"],
-      ["LNK-002", "UIDAI Official MyAadhaar Portal", "Ministry of Electronics and IT", "Aadhaar Services", "https://myaadhaar.uidai.gov.in", "Download e-Aadhaar, PVC card order, check update status.", "Citizen Aadhaar OTP / Biometric", "Aadhaar Number + Registered Mobile"],
-      ["LNK-003", "UP Bhulekh Land Records (भूलेख खतौनी)", "Board of Revenue Uttar Pradesh", "Land Records", "https://upbhulekh.gov.in", "View and print authenticated RoR Khatauni, Gata number details.", "Open Public Search / Certified Copy", "District, Tehsil, Village Code, Gata/Khasra No"],
-      ["LNK-004", "National Voter Service Portal (ECI Voters)", "Election Commission of India", "Voter ID", "https://voters.eci.gov.in", "New Form 6 voter enrollment, Form 8 correction, EPIC download.", "Mobile Login / ECI User", "EPIC Voter Number / Mobile OTP"],
-      ["LNK-005", "PM Kisan Samman Nidhi Portal", "Ministry of Agriculture & Farmers Welfare", "Agriculture", "https://pmkisan.gov.in", "Beneficiary status check, biometric e-KYC, land correction.", "CSC Login / Farmer Self Service", "Aadhaar / Farmer Registration Number"]
+      ["LNK-001", "UIDAI MyAadhaar Portal", "Govt of India (UIDAI)", "Aadhaar", "https://myaadhaar.uidai.gov.in/", "Official UIDAI portal for Aadhaar download, PVC order, document update and status check.", "Active", "yes"],
+      ["LNK-002", "e-District Uttar Pradesh Portal", "Govt of UP", "Certificates", "https://edistrict.up.gov.in/", "Official portal for Income, Caste, Domicile certificates and revenue services in UP.", "Active", "yes"],
+      ["LNK-003", "PM-KISAN Samman Nidhi Portal", "Ministry of Agriculture", "Agriculture", "https://pmkisan.gov.in/", "Direct portal for PM Kisan farmer registration, beneficiary status and Aadhaar OTP eKYC.", "Active", "yes"],
+      ["LNK-004", "National Voter Services Portal (ECI)", "Election Commission of India", "Voter ID", "https://voters.eci.gov.in/", "Online portal for Form 6 voter card apply, shifting, EPIC download, and BLO tracking.", "Active", "yes"],
+      ["LNK-005", "NSDL Online PAN Application", "Income Tax Dept / Protean", "PAN Card", "https://www.onlineservices.nsdl.com/paam/endUserRegisterContact.html", "Official NSDL paperless PAN card application and reprint portal.", "Active", "yes"],
+      ["LNK-006", "PM-JAY Ayushman Bharat Beneficiary Portal", "National Health Authority", "Health Mission", "https://beneficiary.nha.gov.in/", "Official NHA portal to check family eligibility and download Ayushman Golden Card.", "Active", "yes"],
+      ["LNK-007", "UP FCS Ration Card Portal (nfsa.up.gov.in)", "Food & Civil Supplies UP", "Ration Card", "https://fcs.up.gov.in/", "UP Ration Card eligibility list, unit search, and supply quota checking portal.", "Active", "yes"],
+      ["LNK-008", "UP Bhulekh (Land Records & Khatauni)", "Revenue Council UP", "Land Records", "https://upbhulekh.gov.in/", "Search official certified Khatauni land records by Gata/Khasra number across UP.", "Active", "yes"]
     ];
     for (var lIdx = 0; lIdx < defaultLinks.length; lIdx++) {
       lnkSheet.appendRow(defaultLinks[lIdx]);
     }
-    formatHeaderRow(lnkSheet, "#4C1D95");
+    formatHeaderRow(lnkSheet, "#0F766E");
   } catch (errLnk) {
     Logger.log("QuickLinks tab setup error: " + errLnk.toString());
   }
 
-  // 6. CITIZENS REGISTRY TAB (Header only - clean customer master directory)
+  // 6. CITIZENS REGISTRY TAB (Clean Beneficiary Registry)
   try {
     var citSheet = getOrCreateSheet(ss, "Citizens");
     if (citSheet.getLastRow() === 0) {
@@ -204,39 +237,49 @@ function setupAllTemplateSheets() {
         "village", "address", "services_availed", "notes", "status", "created_at"
       ]);
     }
-    formatHeaderRow(citSheet, "#1F2937");
+    formatHeaderRow(citSheet, "#4C1D95");
   } catch (errCit) {
     Logger.log("Citizens tab setup error: " + errCit.toString());
   }
 
-  // 7. SETTINGS TAB (Balaji Communication Center Info)
+  // 7. SETTINGS TAB (Balaji Communication Center Metadata)
   try {
     var setSheet = getOrCreateSheet(ss, "Settings");
     setSheet.clearContents();
     setSheet.appendRow(["Key", "Value"]);
-    setSheet.appendRow(["business_name_en", "Balaji Communication"]);
-    setSheet.appendRow(["business_name_hi", "बालाजी कम्युनिकेशन"]);
-    setSheet.appendRow(["phone_number", "+919870677605"]);
-    setSheet.appendRow(["whatsapp_number", "919870677605"]);
-    setSheet.appendRow(["email", "vikkysingh9870677605@gmail.com"]);
-    setSheet.appendRow(["address_en", "Shop, Masjid bali gali, Inter college road Gaini, Bareilly, Uttar Pradesh - 243302"]);
-    setSheet.appendRow(["address_hi", "दुकान, मस्जिद वाली गली, इंटर कॉलेज रोड, गैनी, बरेली, उत्तर प्रदेश - 243302"]);
+    var defaultSettings = [
+      ["center_name_en", "Balaji Communication & Jan Seva Kendra"],
+      ["center_name_hi", "बालाजी कम्युनिकेशन एवं जन सेवा केंद्र"],
+      ["operator_name", "Jitin Kumar Gangwar"],
+      ["phone", "9058913913"],
+      ["whatsapp", "9058913913"],
+      ["email", "balajicommunicationgaini@gmail.com"],
+      ["csc_id", "CSC-UP-243505-001"],
+      ["address_en", "Main Market Gaini, Near Primary School, Bareilly, Uttar Pradesh - 243505"],
+      ["address_hi", "मुख्य बाजार गैनी, प्राथमिक विद्यालय के पास, बरेली, उत्तर प्रदेश - 243505"],
+      ["working_hours_en", "Monday to Saturday: 8:00 AM - 8:00 PM | Sunday: 9:00 AM - 5:00 PM"],
+      ["google_map_link", "https://maps.google.com/?q=Gaini+Bareilly+Uttar+Pradesh"],
+      ["last_synced_at", new Date().toISOString()]
+    ];
+    for (var sIdx2 = 0; sIdx2 < defaultSettings.length; sIdx2++) {
+      setSheet.appendRow(defaultSettings[sIdx2]);
+    }
     formatHeaderRow(setSheet, "#374151");
   } catch (errSet) {
     Logger.log("Settings tab setup error: " + errSet.toString());
   }
 
-  // Safely clean up default empty "Sheet1" if present
+  // Clean up blank default "Sheet1" if present
   try {
-    var defaultSheet = ss.getSheetByName("Sheet1");
-    if (defaultSheet && defaultSheet.getLastRow() === 0 && ss.getSheets().length > 1) {
+    var defaultSheet = ss.getSheetByName("Sheet1") || ss.getSheetByName("शीट1") || ss.getSheetByName("Sheet 1");
+    if (defaultSheet && ss.getSheets().length > 1 && defaultSheet.getLastRow() === 0) {
       ss.deleteSheet(defaultSheet);
     }
-  } catch (e) {}
+  } catch (eClean) {}
 
   SpreadsheetApp.flush();
-  Logger.log("✅ Balaji Communication Master Database setup completed successfully!");
-  return "✅ Success! All 7 sheet tabs (Services, Enquiries, PriceList, NoticeBoard, QuickLinks, Citizens, Settings) have been created and formatted in your spreadsheet.";
+  Logger.log("Master Setup Complete! All 7 tabs successfully initialized.");
+  return { status: "success", message: "Setup completed successfully" };
 }
 
 function getOrCreateSheet(ss, name) {
@@ -251,6 +294,10 @@ function formatHeaderRow(sheet, bgColor) {
   try {
     var lastCol = sheet.getLastColumn();
     if (!lastCol || lastCol < 1) lastCol = 10;
+    var maxCol = sheet.getMaxColumns();
+    if (lastCol > maxCol) {
+      sheet.insertColumnsAfter(maxCol, lastCol - maxCol);
+    }
     var range = sheet.getRange(1, 1, 1, lastCol);
     range.setBackground(bgColor);
     range.setFontColor("#FFFFFF");
@@ -271,8 +318,9 @@ function doGet(e) {
   
   try {
     var action = (e && e.parameter && e.parameter.action) ? String(e.parameter.action).trim() : "getAllData";
+    var callback = (e && e.parameter && e.parameter.callback) ? String(e.parameter.callback).trim() : "";
     
-    if (action === "getAllData" || action === "all") {
+    if (action === "getAllData" || action === "all" || action === "") {
       result = {
         status: "success",
         message: "Balaji Google Apps Script Backend is Live!",
@@ -300,36 +348,29 @@ function doGet(e) {
       result = { status: "success", data: getCitizensData() };
     } else if (action === "getSettings" || action === "settings") {
       result = { status: "success", data: getSettingsData() };
+    } else if (action === "setup") {
+      result = setupAllTemplateSheets();
+    } else if (action === "createService" || action === "addService") {
+      var sData = extractServiceDataFromParams(e);
+      result = addService(sData);
+    } else if (action === "updateService") {
+      var uData = extractServiceDataFromParams(e);
+      result = updateService(uData);
+    } else if (action === "deleteService") {
+      var delId = (e && e.parameter && (e.parameter.service_id || e.parameter.id)) ? String(e.parameter.service_id || e.parameter.id) : "";
+      result = deleteService(delId);
     } else if (action === "createEnquiry" || action === "addEnquiry") {
-      // Allows browser on GitHub Pages to submit applications via GET (bypassing CORS)
-      var enquiryData = null;
-      if (e.parameter && e.parameter.data) {
-        try {
-          enquiryData = JSON.parse(e.parameter.data);
-        } catch (pe) {}
-      }
-      if (!enquiryData && e.parameter) {
-        enquiryData = {
-          enquiry_id: e.parameter.enquiry_id || e.parameter.id,
-          customer_name: e.parameter.customer_name || e.parameter.applicant_name || e.parameter.name,
-          applicant_name: e.parameter.applicant_name || e.parameter.customer_name || e.parameter.name,
-          father_or_husband_name: e.parameter.father_or_husband_name || e.parameter.father_name,
-          mobile: e.parameter.mobile || e.parameter.phone,
-          service_name: e.parameter.service_name || e.parameter.service,
-          category: e.parameter.category,
-          village: e.parameter.village,
-          address: e.parameter.address,
-          message: e.parameter.message,
-          preferred_contact: e.parameter.preferred_contact || "Call",
-          urgency: e.parameter.urgency || "Normal",
-          status: e.parameter.status || "New"
-        };
-      }
-      result = addEnquiry(enquiryData || {});
+      var enqData = extractEnquiryDataFromParams(e);
+      result = addEnquiry(enqData || {});
     } else if (action === "updateEnquiryStatus") {
-      var enqId = (e.parameter && (e.parameter.enquiry_id || e.parameter.id)) ? String(e.parameter.enquiry_id || e.parameter.id) : "";
-      var status = (e.parameter && e.parameter.status) ? String(e.parameter.status) : "New";
+      var enqId = (e && e.parameter && (e.parameter.enquiry_id || e.parameter.id)) ? String(e.parameter.enquiry_id || e.parameter.id) : "";
+      var status = (e && e.parameter && e.parameter.status) ? String(e.parameter.status) : "New";
       result = updateEnquiryStatus(enqId, status);
+    } else if (action === "deleteEnquiry") {
+      var dEnqId = (e && e.parameter && (e.parameter.enquiry_id || e.parameter.id)) ? String(e.parameter.enquiry_id || e.parameter.id) : "";
+      result = deleteEnquiry(dEnqId);
+    } else if (action === "clearEnquiries") {
+      result = clearAllEnquiriesSheet();
     } else if (action === "ping" || action === "status") {
       result = {
         status: "success",
@@ -343,12 +384,70 @@ function doGet(e) {
     result = { 
       status: "error", 
       message: err.toString(),
-      hint: "Make sure you opened Apps Script via Extensions > Apps Script in your spreadsheet, or set SPREADSHEET_ID in Code.gs."
+      hint: "Make sure you opened Apps Script via Extensions > Apps Script in your spreadsheet."
     };
   }
   
-  return ContentService.createTextOutput(JSON.stringify(result))
+  var jsonOutput = JSON.stringify(result);
+  if (callback) {
+    return ContentService.createTextOutput(callback + "(" + jsonOutput + ")")
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+  return ContentService.createTextOutput(jsonOutput)
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// Helper to extract service data from GET parameter
+function extractServiceDataFromParams(e) {
+  var sData = null;
+  if (e && e.parameter && e.parameter.data) {
+    try { sData = JSON.parse(e.parameter.data); } catch (err) {}
+  }
+  if (!sData && e && e.parameter) {
+    sData = {
+      service_id: e.parameter.service_id || e.parameter.id,
+      service_name_en: e.parameter.service_name_en || e.parameter.name_en || e.parameter.name,
+      service_name_hi: e.parameter.service_name_hi || e.parameter.name_hi,
+      category: e.parameter.category || "General Services",
+      short_description_en: e.parameter.short_description_en,
+      short_description_hi: e.parameter.short_description_hi,
+      full_description_en: e.parameter.full_description_en,
+      full_description_hi: e.parameter.full_description_hi,
+      required_documents: e.parameter.required_documents,
+      icon: e.parameter.icon || "FileText",
+      status: e.parameter.status || "Active",
+      popular: e.parameter.popular === "yes" || e.parameter.popular === "true" || e.parameter.popular === true,
+      estimated_time: e.parameter.estimated_time || "1 to 3 Working Days",
+      whatsapp_message: e.parameter.whatsapp_message
+    };
+  }
+  return sData || {};
+}
+
+// Helper to extract enquiry data from GET parameter
+function extractEnquiryDataFromParams(e) {
+  var enquiryData = null;
+  if (e && e.parameter && e.parameter.data) {
+    try { enquiryData = JSON.parse(e.parameter.data); } catch (pe) {}
+  }
+  if (!enquiryData && e && e.parameter) {
+    enquiryData = {
+      enquiry_id: e.parameter.enquiry_id || e.parameter.id,
+      customer_name: e.parameter.customer_name || e.parameter.applicant_name || e.parameter.name,
+      applicant_name: e.parameter.applicant_name || e.parameter.customer_name || e.parameter.name,
+      father_or_husband_name: e.parameter.father_or_husband_name || e.parameter.father_name,
+      mobile: e.parameter.mobile || e.parameter.phone,
+      service_name: e.parameter.service_name || e.parameter.service,
+      category: e.parameter.category,
+      village: e.parameter.village,
+      address: e.parameter.address,
+      message: e.parameter.message,
+      preferred_contact: e.parameter.preferred_contact || "Call",
+      urgency: e.parameter.urgency || "Normal",
+      status: e.parameter.status || "New"
+    };
+  }
+  return enquiryData || {};
 }
 
 // =========================================================================
@@ -380,9 +479,15 @@ function doPost(e) {
     } else if (action === "updateService") {
       result = updateService(payload.data || payload);
     } else if (action === "deleteService") {
-      result = deleteService(payload.service_id || payload.id);
+      var sId = payload.service_id || payload.id || (payload.data && (payload.data.service_id || payload.data.id));
+      result = deleteService(sId);
     } else if (action === "updateEnquiryStatus") {
       result = updateEnquiryStatus(payload.enquiry_id || payload.id, payload.status);
+    } else if (action === "deleteEnquiry") {
+      var enqId = payload.enquiry_id || payload.id || (payload.data && (payload.data.enquiry_id || payload.data.id));
+      result = deleteEnquiry(enqId);
+    } else if (action === "clearEnquiries") {
+      result = clearAllEnquiriesSheet();
     } else if (action === "savePriceList") {
       result = savePriceListItem(payload.data || payload);
     } else if (action === "saveNotice") {
@@ -391,6 +496,10 @@ function doPost(e) {
       result = saveCitizenItem(payload.data || payload);
     } else if (action === "updateSettings") {
       result = saveSettingsData(payload.data || payload);
+    } else if (action === "setup") {
+      result = setupAllTemplateSheets();
+    } else if (action === "ping" || action === "status") {
+      result = { status: "success", message: "Google Apps Script POST connected!", timestamp: new Date().toISOString() };
     } else {
       result = { status: "error", message: "Unknown POST action: " + action };
     }
@@ -434,7 +543,7 @@ function getServicesList() {
       required_documents: r[8] ? String(r[8]).split(/[\\n;]+/).map(function(s){return s.trim();}).filter(Boolean) : [],
       icon: String(r[9] || "FileText"),
       status: String(r[10] || "Active"),
-      popular: r[11] === true || String(r[11]).toLowerCase() === "yes",
+      popular: r[11] === true || String(r[11]).toLowerCase() === "yes" || String(r[11]).toLowerCase() === "true",
       estimated_time: String(r[12] || "1 to 3 Working Days"),
       whatsapp_message: String(r[13] || "")
     });
@@ -484,7 +593,7 @@ function getPriceListData() {
     list.push({
       price_id: String(r[0] || ("PRC-" + i)),
       service_name: String(r[1] || ""),
-      category: String(r[2] || ""),
+      category: String(r[2] || "General"),
       government_fee: String(r[3] || "₹0"),
       csc_service_fee: String(r[4] || "₹0"),
       total_fee: String(r[5] || "₹0"),
@@ -515,7 +624,7 @@ function getNoticesData() {
       category: String(r[5] || "General"),
       badge_type: String(r[6] || "Important"),
       last_date: String(r[7] || ""),
-      action_link: String(r[8] || ""),
+      action_link: String(r[8] || "/services"),
       status: String(r[9] || "Active"),
       created_at: String(r[10] || new Date().toISOString())
     });
@@ -537,11 +646,11 @@ function getQuickLinksData() {
       link_id: String(r[0] || ("LNK-" + i)),
       portal_name: String(r[1] || ""),
       department: String(r[2] || ""),
-      category: String(r[3] || ""),
-      portal_url: String(r[4] || ""),
+      category: String(r[3] || "General"),
+      portal_url: String(r[4] || "#"),
       description: String(r[5] || ""),
-      portal_login_type: String(r[6] || ""),
-      required_credentials: String(r[7] || "")
+      status: String(r[6] || "Active"),
+      is_featured: r[7] === true || String(r[7]).toLowerCase() === "yes"
     });
   }
   return list;
@@ -589,7 +698,7 @@ function getSettingsData() {
 }
 
 // =========================================================================
-// 5. WRITE & APPEND FUNCTIONS
+// 5. WRITE, UPSERT & DELETE FUNCTIONS
 // =========================================================================
 function addEnquiry(data) {
   var ss = getSpreadsheet();
@@ -635,6 +744,7 @@ function addEnquiry(data) {
 }
 
 function addService(service) {
+  if (!service) return { status: "error", message: "No service data provided" };
   var ss = getSpreadsheet();
   var sheet = getOrCreateSheet(ss, "Services");
   if (sheet.getLastRow() === 0) {
@@ -645,7 +755,7 @@ function addService(service) {
     ]);
     formatHeaderRow(sheet, "#1E3A8A");
   }
-  var id = service.service_id || ("srv-" + Utilities.getUuid().substring(0, 8));
+  var id = service.service_id || service.id || ("srv-" + Utilities.getUuid().substring(0, 8));
   var docsStr = Array.isArray(service.required_documents) ? service.required_documents.join("\\n") : (service.required_documents || "");
 
   // Upsert check: If row exists with same service_id, update it
@@ -655,19 +765,19 @@ function addService(service) {
     for (var i = 0; i < existingIds.length; i++) {
       if (String(existingIds[i][0]).trim().toUpperCase() === String(id).trim().toUpperCase()) {
         var row = i + 2;
-        sheet.getRange(row, 2).setValue(service.service_name_en || "");
-        sheet.getRange(row, 3).setValue(service.service_name_hi || "");
-        sheet.getRange(row, 4).setValue(service.category || "General Services");
-        sheet.getRange(row, 5).setValue(service.short_description_en || "");
-        sheet.getRange(row, 6).setValue(service.short_description_hi || "");
-        sheet.getRange(row, 7).setValue(service.full_description_en || "");
-        sheet.getRange(row, 8).setValue(service.full_description_hi || "");
-        sheet.getRange(row, 9).setValue(docsStr);
-        sheet.getRange(row, 10).setValue(service.icon || "FileText");
-        sheet.getRange(row, 11).setValue(service.status || "Active");
-        sheet.getRange(row, 12).setValue(service.popular ? "yes" : "no");
-        sheet.getRange(row, 13).setValue(service.estimated_time || "1-3 Days");
-        sheet.getRange(row, 14).setValue(service.whatsapp_message || "");
+        if (service.service_name_en !== undefined) sheet.getRange(row, 2).setValue(service.service_name_en);
+        if (service.service_name_hi !== undefined) sheet.getRange(row, 3).setValue(service.service_name_hi);
+        if (service.category !== undefined) sheet.getRange(row, 4).setValue(service.category);
+        if (service.short_description_en !== undefined) sheet.getRange(row, 5).setValue(service.short_description_en);
+        if (service.short_description_hi !== undefined) sheet.getRange(row, 6).setValue(service.short_description_hi);
+        if (service.full_description_en !== undefined) sheet.getRange(row, 7).setValue(service.full_description_en);
+        if (service.full_description_hi !== undefined) sheet.getRange(row, 8).setValue(service.full_description_hi);
+        if (service.required_documents !== undefined) sheet.getRange(row, 9).setValue(docsStr);
+        if (service.icon !== undefined) sheet.getRange(row, 10).setValue(service.icon);
+        if (service.status !== undefined) sheet.getRange(row, 11).setValue(service.status);
+        if (service.popular !== undefined) sheet.getRange(row, 12).setValue(service.popular ? "yes" : "no");
+        if (service.estimated_time !== undefined) sheet.getRange(row, 13).setValue(service.estimated_time);
+        if (service.whatsapp_message !== undefined) sheet.getRange(row, 14).setValue(service.whatsapp_message);
         SpreadsheetApp.flush();
         return { status: "success", service_id: id, updated: true };
       }
@@ -676,8 +786,8 @@ function addService(service) {
 
   sheet.appendRow([
     id,
-    service.service_name_en || "",
-    service.service_name_hi || "",
+    service.service_name_en || service.service_name_hi || "New Service",
+    service.service_name_hi || service.service_name_en || "नई सेवा",
     service.category || "General Services",
     service.short_description_en || "",
     service.short_description_hi || "",
@@ -687,7 +797,7 @@ function addService(service) {
     service.icon || "FileText",
     service.status || "Active",
     service.popular ? "yes" : "no",
-    service.estimated_time || "1-3 Days",
+    service.estimated_time || "1 to 3 Working Days",
     service.whatsapp_message || ""
   ]);
   SpreadsheetApp.flush();
@@ -695,62 +805,120 @@ function addService(service) {
 }
 
 function updateService(service) {
+  if (!service) return { status: "error", message: "No service data provided" };
+  var id = service.service_id || service.id;
+  if (!id) return { status: "error", message: "Missing service_id in update payload" };
+
   var ss = getSpreadsheet();
   var sheet = ss.getSheetByName("Services");
-  if (!sheet) return { status: "error", message: "Services sheet not found" };
+  if (!sheet) {
+    return addService(service);
+  }
   var data = sheet.getDataRange().getValues();
+  var targetId = String(id).trim().toUpperCase();
+
   for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim().toUpperCase() === String(service.service_id).trim().toUpperCase()) {
+    if (String(data[i][0]).trim().toUpperCase() === targetId) {
       var row = i + 1;
       var docsStr = Array.isArray(service.required_documents) ? service.required_documents.join("\\n") : service.required_documents;
-      sheet.getRange(row, 2).setValue(service.service_name_en);
-      sheet.getRange(row, 3).setValue(service.service_name_hi);
-      sheet.getRange(row, 4).setValue(service.category);
-      sheet.getRange(row, 5).setValue(service.short_description_en);
-      sheet.getRange(row, 6).setValue(service.short_description_hi);
-      sheet.getRange(row, 7).setValue(service.full_description_en);
-      sheet.getRange(row, 8).setValue(service.full_description_hi);
-      sheet.getRange(row, 9).setValue(docsStr);
-      sheet.getRange(row, 10).setValue(service.icon);
-      sheet.getRange(row, 11).setValue(service.status);
-      sheet.getRange(row, 12).setValue(service.popular ? "yes" : "no");
-      sheet.getRange(row, 13).setValue(service.estimated_time);
-      sheet.getRange(row, 14).setValue(service.whatsapp_message || "");
+      if (service.service_name_en !== undefined) sheet.getRange(row, 2).setValue(service.service_name_en);
+      if (service.service_name_hi !== undefined) sheet.getRange(row, 3).setValue(service.service_name_hi);
+      if (service.category !== undefined) sheet.getRange(row, 4).setValue(service.category);
+      if (service.short_description_en !== undefined) sheet.getRange(row, 5).setValue(service.short_description_en);
+      if (service.short_description_hi !== undefined) sheet.getRange(row, 6).setValue(service.short_description_hi);
+      if (service.full_description_en !== undefined) sheet.getRange(row, 7).setValue(service.full_description_en);
+      if (service.full_description_hi !== undefined) sheet.getRange(row, 8).setValue(service.full_description_hi);
+      if (docsStr !== undefined) sheet.getRange(row, 9).setValue(docsStr);
+      if (service.icon !== undefined) sheet.getRange(row, 10).setValue(service.icon);
+      if (service.status !== undefined) sheet.getRange(row, 11).setValue(service.status);
+      if (service.popular !== undefined) sheet.getRange(row, 12).setValue(service.popular ? "yes" : "no");
+      if (service.estimated_time !== undefined) sheet.getRange(row, 13).setValue(service.estimated_time);
+      if (service.whatsapp_message !== undefined) sheet.getRange(row, 14).setValue(service.whatsapp_message);
       SpreadsheetApp.flush();
-      return { status: "success" };
+      return { status: "success", service_id: id, updated: true };
     }
   }
-  return { status: "error", message: "Service not found: " + service.service_id };
+
+  // If service was not found in sheet, upsert (create) it automatically!
+  return addService(service);
 }
 
 function deleteService(serviceId) {
+  if (typeof serviceId === "object" && serviceId !== null) {
+    serviceId = serviceId.service_id || serviceId.id;
+  }
+  if (!serviceId) return { status: "error", message: "Missing service_id for deletion" };
+
   var ss = getSpreadsheet();
   var sheet = ss.getSheetByName("Services");
   if (!sheet) return { status: "error", message: "Services sheet not found" };
+
   var data = sheet.getDataRange().getValues();
+  var targetId = String(serviceId).trim().toUpperCase();
+
   for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim().toUpperCase() === String(serviceId).trim().toUpperCase()) {
+    if (String(data[i][0]).trim().toUpperCase() === targetId) {
       sheet.deleteRow(i + 1);
       SpreadsheetApp.flush();
-      return { status: "success" };
+      return { status: "success", service_id: serviceId, deleted: true };
     }
   }
-  return { status: "error", message: "Service ID not found: " + serviceId };
+  // Idempotent: if already deleted or absent, return success
+  return { status: "success", service_id: serviceId, deleted: true, note: "Already absent from sheet" };
 }
 
 function updateEnquiryStatus(enquiryId, newStatus) {
+  if (!enquiryId) return { status: "error", message: "Missing enquiry_id" };
   var ss = getSpreadsheet();
   var sheet = ss.getSheetByName("Enquiries");
   if (!sheet) return { status: "error", message: "Enquiries sheet not found" };
+
   var data = sheet.getDataRange().getValues();
+  var targetId = String(enquiryId).trim().toUpperCase();
+
   for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim().toUpperCase() === String(enquiryId).trim().toUpperCase()) {
+    if (String(data[i][0]).trim().toUpperCase() === targetId) {
       sheet.getRange(i + 1, 12).setValue(newStatus);
       SpreadsheetApp.flush();
       return { status: "success", enquiry_id: enquiryId, status: newStatus };
     }
   }
   return { status: "error", message: "Enquiry ID not found: " + enquiryId };
+}
+
+function deleteEnquiry(enquiryId) {
+  if (typeof enquiryId === "object" && enquiryId !== null) {
+    enquiryId = enquiryId.enquiry_id || enquiryId.id;
+  }
+  if (!enquiryId) return { status: "error", message: "Missing enquiry_id" };
+
+  var ss = getSpreadsheet();
+  var sheet = ss.getSheetByName("Enquiries");
+  if (!sheet) return { status: "error", message: "Enquiries sheet not found" };
+
+  var data = sheet.getDataRange().getValues();
+  var targetId = String(enquiryId).trim().toUpperCase();
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim().toUpperCase() === targetId) {
+      sheet.deleteRow(i + 1);
+      SpreadsheetApp.flush();
+      return { status: "success", enquiry_id: enquiryId, deleted: true };
+    }
+  }
+  return { status: "success", enquiry_id: enquiryId, deleted: true, note: "Already absent" };
+}
+
+function clearAllEnquiriesSheet() {
+  var ss = getSpreadsheet();
+  var sheet = ss.getSheetByName("Enquiries");
+  if (!sheet) return { status: "error", message: "Enquiries sheet not found" };
+  var lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.deleteRows(2, lastRow - 1);
+  }
+  SpreadsheetApp.flush();
+  return { status: "success", message: "All enquiries cleared successfully" };
 }
 
 function savePriceListItem(item) {

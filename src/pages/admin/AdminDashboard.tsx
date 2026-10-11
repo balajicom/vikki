@@ -67,7 +67,9 @@ export const AdminDashboard: React.FC = () => {
     deleteEnquiry,
     updateSettings,
     syncWithGoogleSheets,
-    importCsvData
+    importCsvData,
+    lastLiveSyncTime,
+    isLiveAutoSyncing
   } = useData();
 
   const navigate = useNavigate();
@@ -111,8 +113,6 @@ export const AdminDashboard: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
-  const [isTestingSubmission, setIsTestingSubmission] = useState(false);
-  const [testSubmissionResult, setTestSubmissionResult] = useState<{ success: boolean; message: string } | null>(null);
   const [copiedEnv, setCopiedEnv] = useState(false);
 
   // Google Sheet & CSV Templates State
@@ -289,7 +289,6 @@ export const AdminDashboard: React.FC = () => {
   const handleSyncSheets = async () => {
     setIsSyncing(true);
     setSyncStatusMsg(null);
-    setTestSubmissionResult(null);
     const trimmed = sheetsUrlInput.trim();
     if (trimmed) {
       // Save to settings permanently
@@ -304,55 +303,6 @@ export const AdminDashboard: React.FC = () => {
     const res = await syncWithGoogleSheets(trimmed);
     setIsSyncing(false);
     setSyncStatusMsg(res.message);
-  };
-
-  // Test direct dispatch to Google Sheets table from the browser (verifies live delivery)
-  const handleTestDirectSubmission = async () => {
-    const targetUrl = sheetsUrlInput.trim();
-    if (!targetUrl || !targetUrl.includes('script.google.com')) {
-      setTestSubmissionResult({
-        success: false,
-        message: 'Please paste a valid Google Apps Script Web App URL (ending with /exec) before testing live delivery.'
-      });
-      return;
-    }
-
-    setIsTestingSubmission(true);
-    setTestSubmissionResult(null);
-
-    const testId = `TEST-LIVE-${Date.now().toString(36).toUpperCase()}`;
-    const testEnquiry: Enquiry = {
-      enquiry_id: testId,
-      customer_name: 'Test Verification Citizen',
-      applicant_name: 'Test Verification Citizen',
-      father_or_husband_name: 'Shri Balaji Test',
-      mobile: '9870677605',
-      service_id: 'srv-test',
-      service_name: 'GitHub Live Table Verification Test',
-      category: 'System Test',
-      village: 'Gaini',
-      address: 'Masjid Bali Gali, Inter College Road Gaini, Bareilly',
-      message: 'Direct verification test sent from Balaji Admin Dashboard to confirm that applications go into the Google Sheet "Enquiries" table on GitHub Live.',
-      preferred_contact: 'WhatsApp',
-      urgency: 'Normal',
-      status: 'New',
-      created_at: new Date().toISOString()
-    };
-
-    try {
-      await sendApplicationToGoogleSheets(targetUrl, testEnquiry);
-      setTestSubmissionResult({
-        success: true,
-        message: `Direct dispatch initiated (Ref ID: ${testId})! Open your Google Sheet and check the "Enquiries" tab — you should see this test row appear immediately.`
-      });
-    } catch (err: any) {
-      setTestSubmissionResult({
-        success: false,
-        message: `Failed sending test record: ${err?.message || 'Network error'}`
-      });
-    } finally {
-      setIsTestingSubmission(false);
-    }
   };
 
   // Download config.json for GitHub Pages deployment
@@ -836,7 +786,7 @@ export const AdminDashboard: React.FC = () => {
                     type="button"
                     onClick={() => setIsClearEnquiriesModalOpen(true)}
                     className="px-2.5 py-1 text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                    title="Remove all test/sample enquiries to keep table clean"
+                    title="Remove all enquiries to keep table clean"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>Clear Enquiries</span>
@@ -1813,35 +1763,30 @@ export const AdminDashboard: React.FC = () => {
                   <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
                   <span>{isSyncing ? 'Connecting & Syncing...' : 'Fetch & Sync Now'}</span>
                 </button>
-                <button
-                  type="button"
-                  id="btn-test-sheet-write"
-                  onClick={handleTestDirectSubmission}
-                  disabled={isTestingSubmission || !sheetsUrlInput.trim()}
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors inline-flex items-center justify-center gap-2 shrink-0 disabled:opacity-50 cursor-pointer"
-                  title="Sends a test enquiry row directly to your Google Sheet table to verify writes"
-                >
-                  <UploadCloud className={`w-4 h-4 ${isTestingSubmission ? 'animate-bounce' : ''}`} />
-                  <span>{isTestingSubmission ? 'Sending Test...' : '🧪 Test Live Delivery'}</span>
-                </button>
               </div>
 
-              {testSubmissionResult && (
-                <div className={`p-3.5 rounded-xl text-xs font-medium border flex items-start gap-2.5 ${
-                  testSubmissionResult.success
-                    ? 'bg-blue-50 border-blue-200 text-blue-900'
-                    : 'bg-rose-50 border-rose-200 text-rose-900'
-                }`}>
-                  {testSubmissionResult.success ? (
-                    <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                  )}
-                  <div className="space-y-1">
-                    <p className="font-bold">{testSubmissionResult.message}</p>
+              {/* LIVE REAL-TIME MULTI-BROWSER AUTO-SYNC STATUS */}
+              <div className="p-3.5 bg-emerald-50/80 border border-emerald-200 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2.5">
+                  <span className="relative flex h-2.5 w-2.5 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </span>
+                  <div>
+                    <span className="font-bold text-emerald-950 block sm:inline">
+                      Live Multi-Browser Auto-Sync Active
+                    </span>
+                    <span className="text-emerald-700 text-[11px] sm:ml-2">
+                      (All services, price lists & updates automatically sync every 3s to every open browser & device)
+                    </span>
                   </div>
                 </div>
-              )}
+                {lastLiveSyncTime && (
+                  <div className="text-[11px] text-emerald-800 font-medium shrink-0 bg-white/70 px-2.5 py-1 rounded-lg border border-emerald-200">
+                    Live Status: <span className="font-bold text-emerald-900">Synchronized</span> (<span className="font-mono">{lastLiveSyncTime}</span>)
+                  </div>
+                )}
+              </div>
 
               {/* Real-time URL format validation & warnings */}
               {sheetsUrlInput.trim().length > 0 && (
@@ -2555,7 +2500,7 @@ export const AdminDashboard: React.FC = () => {
             <div className="text-center space-y-1">
               <h3 className="text-base font-bold text-slate-900">Clear All Enquiries</h3>
               <p className="text-xs text-slate-500">
-                This will remove all {enquiries.length} current enquiries / test entries from the database. Live submissions sent to your Google Sheet will remain safe in the spreadsheet.
+                This will remove all {enquiries.length} current enquiries from the portal database. Submissions sent to your Google Sheet remain stored in your spreadsheet.
               </p>
             </div>
             <div className="flex items-center gap-2 pt-2">
