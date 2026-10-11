@@ -570,7 +570,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [adminToken]);
 
-  // Background Live Sync (runs every 3 seconds across all devices & browsers)
+  // Background Live Sync (runs every 1.5 seconds across all devices & browsers)
   const pollLatestData = useCallback(async () => {
     try {
       // 1. Unified live sync endpoint (super-fast lightweight payload)
@@ -584,6 +584,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
           return prev;
         });
+
+        // Sync settings
+        if (syncRes.data.settings && typeof syncRes.data.settings === 'object') {
+          setSettings(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(syncRes.data.settings)) {
+              try { localStorage.setItem('balaji_settings', JSON.stringify(syncRes.data.settings)); } catch (e) {}
+              return { ...prev, ...syncRes.data.settings };
+            }
+            return prev;
+          });
+        }
+
+        // Sync categories
+        const dynamicCats = Array.from(new Set(liveServices.map(s => s.category).filter(Boolean)));
+        if (dynamicCats.length > 0) {
+          setCategories(prev => {
+            if (dynamicCats.length !== prev.length || dynamicCats.some(c => !prev.includes(c))) {
+              return dynamicCats;
+            }
+            return prev;
+          });
+        }
 
         if (Array.isArray(syncRes.data.priceList)) {
           setPriceList(prev => {
@@ -703,11 +725,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const parsed = JSON.parse(e.newValue);
           if (Array.isArray(parsed)) setQuickLinks(parsed);
         } catch (err) {}
+      } else if (e.key === 'balaji_settings' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (parsed && typeof parsed === 'object') setSettings(parsed);
+        } catch (err) {}
       }
     };
     window.addEventListener('storage', handleStorageChange);
 
-    // Multi-browser live polling (every 3 seconds)
+    // Immediate auto-refresh when tab gains focus or window becomes visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        pollLatestData();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+
+    // Multi-browser live polling (every 1.5 seconds)
     let isPolling = false;
     const interval = setInterval(async () => {
       if (isPolling) return;
@@ -717,10 +753,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } finally {
         isPolling = false;
       }
-    }, 3000);
+    }, 1500);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
       clearInterval(interval);
     };
   }, [fetchData, pollLatestData]);
@@ -1343,10 +1381,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
 
             if (parsedServices.length > 0) {
-              const newIds = new Set(parsedServices.map(s => s.service_id));
-              const merged = [...parsedServices, ...services.filter(s => !newIds.has(s.service_id))];
-              setServices(merged);
-              localStorage.setItem('balaji_services', JSON.stringify(merged));
+              setServices(parsedServices);
+              localStorage.setItem('balaji_services', JSON.stringify(parsedServices));
               const updatedSettings = {
                 ...settings,
                 google_sheet_webapp_url: targetUrl,
@@ -1357,7 +1393,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               localStorage.setItem('balaji_settings', JSON.stringify(updatedSettings));
               return {
                 success: true,
-                message: `Successfully connected to Google Sheet! Imported ${parsedServices.length} services (Total catalog: ${merged.length} services).`,
+                message: `Successfully connected to Google Sheet! Imported ${parsedServices.length} services directly from your sheet.`,
                 count: parsedServices.length
               };
             }
@@ -1456,10 +1492,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (serviceList.length > 0) {
-        const newIds = new Set(serviceList.map(s => s.service_id));
-        const merged = [...serviceList, ...services.filter(s => !newIds.has(s.service_id))];
-        setServices(merged);
-        localStorage.setItem('balaji_services', JSON.stringify(merged));
+        setServices(serviceList);
+        localStorage.setItem('balaji_services', JSON.stringify(serviceList));
         const updatedSettings = {
           ...settings,
           google_sheet_webapp_url: targetUrl,
@@ -1471,7 +1505,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try { localStorage.setItem('balaji_sheet_url', targetUrl); } catch (e) {}
         return {
           success: true,
-          message: `Successfully connected to Google Sheet! Synced ${serviceList.length} services and all sheet tabs (Total catalog: ${merged.length} services).`,
+          message: `Successfully connected to Google Sheet! Synced ${serviceList.length} services and all sheet tabs directly.`,
           count: serviceList.length
         };
       } else {

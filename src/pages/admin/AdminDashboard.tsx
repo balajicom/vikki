@@ -417,12 +417,13 @@ export const AdminDashboard: React.FC = () => {
               BC
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl font-extrabold text-slate-900">
                   Balaji Admin Control Center
                 </h1>
-                <span className="px-2 py-0.5 text-[10px] font-extrabold bg-emerald-100 text-emerald-800 rounded-full">
-                  Live
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] font-bold bg-emerald-50 text-emerald-800 rounded-full border border-emerald-300 shadow-2xs">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Multi-Browser Live Auto-Sync Active {lastLiveSyncTime ? `(${lastLiveSyncTime})` : ''}
                 </span>
               </div>
               <p className="text-xs text-slate-500">
@@ -1810,9 +1811,9 @@ export const AdminDashboard: React.FC = () => {
                     <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs flex items-start gap-2.5 shadow-2xs">
                       <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                       <div className="space-y-1">
-                        <strong className="font-bold text-amber-950 block">⚠️ Test Deployment (/dev) link detected:</strong>
+                        <strong className="font-bold text-amber-950 block">⚠️ Draft (/dev) Link Detected:</strong>
                         <p className="text-[11px] leading-relaxed">
-                          The <code>/dev</code> test link requires Google login and cannot be synced publicly.
+                          The <code>/dev</code> URL requires private Google login and cannot be queried by the live portal.
                         </p>
                         <p className="text-[11px] font-semibold text-amber-950 bg-amber-100/70 p-2 rounded-lg border border-amber-200">
                           <strong>Fix:</strong> Click <strong>Deploy &gt; New deployment &gt; Web app</strong> &gt; Set <strong>Who has access: Anyone</strong> &gt; Copy the <strong>/exec</strong> link.

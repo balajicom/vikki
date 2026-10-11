@@ -263,18 +263,16 @@ async function syncFromGoogleSource(inputUrl: string): Promise<{
     const gidMatch = url.match(/[?#&]gid=([0-9]+)/i);
     const gid = gidMatch ? gidMatch[1] : '0';
 
-    // Helper to merge imported services with existing ones
+    // Helper to apply imported services directly from sheet
     const applyMergedServices = (importedServices: Service[], sourceType: 'spreadsheet' | 'webapp') => {
-      const sheetServiceIds = new Set(importedServices.map(s => s.service_id));
-      const existingRetained = db.services.filter(s => !sheetServiceIds.has(s.service_id));
-      db.services = [...importedServices, ...existingRetained];
+      db.services = [...importedServices];
       db.settings.google_sheet_webapp_url = url;
       db.settings.google_sheet_url = url;
       db.settings.last_sheet_sync = new Date().toISOString();
       saveDatabase(db);
       return {
         success: true,
-        message: `Successfully connected to Google Sheet! Imported ${importedServices.length} services (Total catalog: ${db.services.length} services).`,
+        message: `Successfully connected to Google Sheet! Synced ${importedServices.length} services directly from sheet.`,
         count: importedServices.length,
         sourceType,
         services: db.services
@@ -468,9 +466,7 @@ async function syncFromGoogleSource(inputUrl: string): Promise<{
     }
 
     if (serviceList.length > 0) {
-      const sheetServiceIds = new Set(serviceList.map(s => s.service_id));
-      const existingRetained = db.services.filter(s => !sheetServiceIds.has(s.service_id));
-      db.services = [...serviceList, ...existingRetained];
+      db.services = [...serviceList];
       db.settings.google_sheet_webapp_url = url;
       db.settings.google_sheet_url = url;
       db.settings.last_sheet_sync = new Date().toISOString();
