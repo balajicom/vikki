@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      '@': path.resolve(__vikki, '.'),
+      '@': path.resolve( /vikki, '.'),
     },
   },
   server: {
