@@ -1,12 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Sparkles, Search, Layers, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, Sparkles, Search, Layers, CheckCircle2 } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { useLanguage } from '../context/LanguageContext';
 import { ServiceCard } from './ServiceCard';
 
 export const PopularServices: React.FC = () => {
-  const { services, categories, isLoading, refreshData, lastLiveSyncTime } = useData();
+  const { services, categories } = useData();
   const { language, t } = useLanguage();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -96,15 +96,6 @@ export const PopularServices: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap shrink-0">
-            <button
-              type="button"
-              onClick={() => refreshData()}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-blue-700 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-lg transition-colors cursor-pointer"
-              title="Refresh latest services data"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>{language === 'hi' ? 'ताज़ा करें' : 'Refresh'}</span>
-            </button>
             <Link
               to="/services"
               id="link-view-all-services-header"

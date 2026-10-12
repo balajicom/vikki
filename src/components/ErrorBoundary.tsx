@@ -1,5 +1,5 @@
 import React, { ErrorInfo, ReactNode } from 'react';
-import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { AlertTriangle, Home } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
@@ -29,10 +29,6 @@ export class ErrorBoundary extends (React.Component as new (props: Props) => {
     console.error('Uncaught display error in UI:', error, errorInfo);
   }
 
-  public handleReload = () => {
-    window.location.reload();
-  };
-
   public handleGoHome = () => {
     window.location.hash = '#/';
     this.setState({ hasError: false, error: undefined });
@@ -60,22 +56,14 @@ export class ErrorBoundary extends (React.Component as new (props: Props) => {
               {this.state.error?.message || 'Unknown render error occurred.'}
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-2 pt-2">
-              <button
-                type="button"
-                onClick={this.handleReload}
-                className="flex-1 py-2.5 px-4 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Reload Page (पेज रीलोड करें)</span>
-              </button>
+            <div className="pt-2">
               <button
                 type="button"
                 onClick={this.handleGoHome}
-                className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200"
+                className="w-full py-2.5 px-4 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
               >
                 <Home className="w-3.5 h-3.5" />
-                <span>Go to Home (मुख्य पृष्ठ)</span>
+                <span>Go to Home (मुख्य पृष्ठ पर जाएं)</span>
               </button>
             </div>
           </div>

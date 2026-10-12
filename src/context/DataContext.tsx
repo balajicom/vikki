@@ -53,7 +53,6 @@ interface DataContextType {
   updateSettings: (newSettings: Partial<WebsiteSettings>) => Promise<boolean>;
   syncWithGoogleSheets: (url?: string) => Promise<{ success: boolean; message: string; count?: number }>;
   importCsvData: (type: string, csvText: string) => Promise<{ success: boolean; message: string; count?: number }>;
-  refreshData: () => Promise<void>;
   isLiveAutoSyncing: boolean;
   lastLiveSyncTime: string | null;
 }
@@ -593,138 +592,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [adminToken]);
 
-  // Background Live Sync (runs every 1.5 seconds across all devices & browsers)
-  const pollLatestData = useCallback(async () => {
-    try {
-      // 1. Unified live sync endpoint (super-fast lightweight payload)
-      const syncRes = await safeJsonFetch('/api/sync-live');
-      if (syncRes.ok && syncRes.data?.success && Array.isArray(syncRes.data.services)) {
-        const liveServices: Service[] = syncRes.data.services.map((s: any) => ({
-          ...s,
-          required_documents: Array.isArray(s.required_documents)
-            ? s.required_documents
-            : (typeof s.required_documents === 'string' ? s.required_documents.split(/[;\n]+/).map((d: string) => d.trim()).filter(Boolean) : ['Original Aadhaar Card', 'Mobile Number']),
-          status: s.status || 'Active',
-          popular: Boolean(s.popular)
-        }));
-        setServices(prev => {
-          if (JSON.stringify(prev) !== JSON.stringify(liveServices)) {
-            try { localStorage.setItem('balaji_services', JSON.stringify(liveServices)); } catch (e) {}
-            return liveServices;
-          }
-          return prev;
-        });
-
-        // Sync settings
-        if (syncRes.data.settings && typeof syncRes.data.settings === 'object') {
-          setSettings(prev => {
-            if (JSON.stringify(prev) !== JSON.stringify(syncRes.data.settings)) {
-              try { localStorage.setItem('balaji_settings', JSON.stringify(syncRes.data.settings)); } catch (e) {}
-              return { ...prev, ...syncRes.data.settings };
-            }
-            return prev;
-          });
-        }
-
-        // Sync categories
-        const dynamicCats = Array.from(new Set(liveServices.map(s => s.category).filter(Boolean)));
-        if (dynamicCats.length > 0) {
-          setCategories(prev => {
-            if (dynamicCats.length !== prev.length || dynamicCats.some(c => !prev.includes(c))) {
-              return dynamicCats;
-            }
-            return prev;
-          });
-        }
-
-        if (Array.isArray(syncRes.data.priceList)) {
-          setPriceList(prev => {
-            if (JSON.stringify(prev) !== JSON.stringify(syncRes.data.priceList)) {
-              try { localStorage.setItem('balaji_pricelist', JSON.stringify(syncRes.data.priceList)); } catch (e) {}
-              return syncRes.data.priceList;
-            }
-            return prev;
-          });
-        }
-
-        if (Array.isArray(syncRes.data.notices)) {
-          setNotices(prev => {
-            if (JSON.stringify(prev) !== JSON.stringify(syncRes.data.notices)) {
-              try { localStorage.setItem('balaji_notices', JSON.stringify(syncRes.data.notices)); } catch (e) {}
-              return syncRes.data.notices;
-            }
-            return prev;
-          });
-        }
-
-        if (Array.isArray(syncRes.data.quickLinks)) {
-          setQuickLinks(prev => {
-            if (JSON.stringify(prev) !== JSON.stringify(syncRes.data.quickLinks)) {
-              try { localStorage.setItem('balaji_quicklinks', JSON.stringify(syncRes.data.quickLinks)); } catch (e) {}
-              return syncRes.data.quickLinks;
-            }
-            return prev;
-          });
-        }
-
-        if (adminToken) {
-          const enqRes = await safeJsonFetch('/api/enquiries', {
-            headers: { Authorization: `Bearer ${adminToken}` }
-          });
-          if (enqRes.ok && Array.isArray(enqRes.data?.enquiries)) {
-            setEnquiries(prev => {
-              if (JSON.stringify(prev) !== JSON.stringify(enqRes.data.enquiries)) {
-                try { localStorage.setItem('balaji_enquiries', JSON.stringify(enqRes.data.enquiries)); } catch (e) {}
-                return enqRes.data.enquiries;
-              }
-              return prev;
-            });
-          }
-        }
-
-        setLastLiveSyncTime(new Date().toLocaleTimeString());
-        setIsLiveAutoSyncing(true);
-        return;
-      }
-
-      // 2. Google Sheets Web App Fallback (for static GitHub Pages hosting)
-      const activeSheetUrl = getGoogleSheetWebappUrl(settings);
-      if (activeSheetUrl && activeSheetUrl.includes('script.google.com')) {
-        const sheetRes = await fetch(`${activeSheetUrl}${activeSheetUrl.includes('?') ? '&' : '?'}action=getAllData`);
-        if (sheetRes.ok) {
-          const parsed = await sheetRes.json();
-          if (parsed && parsed.status === 'success' && parsed.data) {
-            if (Array.isArray(parsed.data.services) && parsed.data.services.length > 0) {
-              setServices(prev => {
-                if (JSON.stringify(prev) !== JSON.stringify(parsed.data.services)) {
-                  try { localStorage.setItem('balaji_services', JSON.stringify(parsed.data.services)); } catch (e) {}
-                  return parsed.data.services;
-                }
-                return prev;
-              });
-            }
-            if (Array.isArray(parsed.data.priceList) && parsed.data.priceList.length > 0) {
-              setPriceList(parsed.data.priceList);
-            }
-            if (Array.isArray(parsed.data.notices) && parsed.data.notices.length > 0) {
-              setNotices(parsed.data.notices);
-            }
-            if (Array.isArray(parsed.data.quickLinks) && parsed.data.quickLinks.length > 0) {
-              setQuickLinks(parsed.data.quickLinks);
-            }
-            if (adminToken && Array.isArray(parsed.data.enquiries)) {
-              setEnquiries(parsed.data.enquiries);
-            }
-            setLastLiveSyncTime(new Date().toLocaleTimeString());
-            setIsLiveAutoSyncing(true);
-          }
-        }
-      }
-    } catch (pollErr) {
-      // Background sync non-blocking
-    }
-  }, [adminToken, settings]);
-
   useEffect(() => {
     fetchData();
 
@@ -764,34 +631,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     window.addEventListener('storage', handleStorageChange);
 
-    // Immediate auto-refresh when tab gains focus or window becomes visible
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        pollLatestData();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleVisibilityChange);
-
-    // Multi-browser live polling (every 1.5 seconds)
-    let isPolling = false;
-    const interval = setInterval(async () => {
-      if (isPolling) return;
-      isPolling = true;
-      try {
-        await pollLatestData();
-      } finally {
-        isPolling = false;
-      }
-    }, 1500);
-
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleVisibilityChange);
-      clearInterval(interval);
     };
-  }, [fetchData, pollLatestData]);
+  }, [fetchData]);
 
   // Modal handlers
   const openServiceDetails = (service: Service) => {
@@ -1726,7 +1569,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateSettings,
       syncWithGoogleSheets,
       importCsvData,
-      refreshData: fetchData,
       isLiveAutoSyncing,
       lastLiveSyncTime
     }}>
