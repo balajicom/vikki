@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Lock, Mail, AlertCircle, CheckCircle, ArrowRight } from 'lucide-react';
+import { Shield, Lock, Mail, AlertCircle, ArrowRight } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 
 export const AdminLogin: React.FC = () => {
   const { loginAdmin, isAdminLoggedIn } = useData();
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState('admin@balaji.com');
-  const [password, setPassword] = useState('balaji@2026');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,7 +51,6 @@ export const AdminLogin: React.FC = () => {
           </p>
         </div>
 
-     
         {error && (
           <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-xs text-rose-800">
             <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />

@@ -4,9 +4,8 @@ import path from 'path';
 import { defineConfig } from 'vite';
 
 export default defineConfig(({ command }) => {
-  // Use '/vikki/' base for GitHub Pages (https://balajicom.github.io/vikki/) during build
-  // Use '/' during local development (port 3000)
-  const base = process.env.VITE_BASE_URL || (command === 'build' ? '/vikki/' : '/');
+  // Use '/' by default for AI Studio & standard hosting, or '/vikki/' if building specifically for GitHub Pages
+  const base = process.env.VITE_BASE_URL || (process.env.GITHUB_PAGES === 'true' ? '/vikki/' : '/');
 
   return {
     base,

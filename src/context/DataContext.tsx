@@ -67,8 +67,13 @@ function loadLocalServices(): Service[] {
     const raw = localStorage.getItem('balaji_services');
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((s: any) => ({
+          ...s,
+          required_documents: Array.isArray(s.required_documents)
+            ? s.required_documents
+            : (typeof s.required_documents === 'string' ? s.required_documents.split(/[;\n]+/).map((d: string) => d.trim()).filter(Boolean) : ['Original Aadhaar Card', 'Mobile Number'])
+        }));
       }
     }
   } catch (err) {
@@ -365,7 +370,10 @@ async function safeJsonFetch(input: RequestInfo | URL, init?: RequestInit): Prom
   rawText?: string;
 }> {
   try {
-    const res = await fetch(input, init);
+    const res = await fetch(input, {
+      credentials: 'same-origin',
+      ...init
+    });
     const contentType = res.headers.get('content-type') || '';
     const text = await res.text();
     const trimmed = text.trim();
@@ -440,7 +448,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         headers: adminToken ? { Authorization: `Bearer ${adminToken}` } : {}
       });
       if (srvRes.ok && srvRes.data?.services && Array.isArray(srvRes.data.services)) {
-        const serverServices: Service[] = srvRes.data.services;
+        const serverServices: Service[] = srvRes.data.services.map((s: any) => ({
+          ...s,
+          required_documents: Array.isArray(s.required_documents)
+            ? s.required_documents
+            : (typeof s.required_documents === 'string' ? s.required_documents.split(/[;\n]+/).map((d: string) => d.trim()).filter(Boolean) : ['Original Aadhaar Card', 'Mobile Number']),
+          status: s.status || 'Active',
+          popular: Boolean(s.popular)
+        }));
         setServices(serverServices);
         try {
           localStorage.setItem('balaji_services', JSON.stringify(serverServices));
@@ -576,7 +591,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // 1. Unified live sync endpoint (super-fast lightweight payload)
       const syncRes = await safeJsonFetch('/api/sync-live');
       if (syncRes.ok && syncRes.data?.success && Array.isArray(syncRes.data.services)) {
-        const liveServices: Service[] = syncRes.data.services;
+        const liveServices: Service[] = syncRes.data.services.map((s: any) => ({
+          ...s,
+          required_documents: Array.isArray(s.required_documents)
+            ? s.required_documents
+            : (typeof s.required_documents === 'string' ? s.required_documents.split(/[;\n]+/).map((d: string) => d.trim()).filter(Boolean) : ['Original Aadhaar Card', 'Mobile Number']),
+          status: s.status || 'Active',
+          popular: Boolean(s.popular)
+        }));
         setServices(prev => {
           if (JSON.stringify(prev) !== JSON.stringify(liveServices)) {
             try { localStorage.setItem('balaji_services', JSON.stringify(liveServices)); } catch (e) {}
@@ -981,6 +1003,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Add / Create Service
   const addService = async (serviceData: Partial<Service>): Promise<boolean> => {
     const token = adminToken || localStorage.getItem('balaji_admin_token') || 'balaji_secure_admin_session_token_2026';
+    const rawDocs = serviceData.required_documents;
+    const normDocs = Array.isArray(rawDocs)
+      ? rawDocs
+      : (typeof rawDocs === 'string' ? (rawDocs as string).split(/[;\n]+/).map(s => s.trim()).filter(Boolean) : ['Original Aadhaar Card', 'Registered Mobile Number']);
+
     const completeService: Service = {
       service_id: serviceData.service_id || `srv-${Date.now().toString(36)}`,
       service_name_en: serviceData.service_name_en || serviceData.service_name_hi || 'New Service',
@@ -990,7 +1017,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       short_description_hi: serviceData.short_description_hi || '',
       full_description_en: serviceData.full_description_en || '',
       full_description_hi: serviceData.full_description_hi || '',
-      required_documents: Array.isArray(serviceData.required_documents) ? serviceData.required_documents : ['Original Aadhaar Card', 'Registered Mobile Number'],
+      required_documents: normDocs,
       icon: serviceData.icon || 'FileText',
       status: serviceData.status || 'Active',
       popular: Boolean(serviceData.popular),
@@ -1001,12 +1028,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     // 1. Immediately persist locally (ensures service never disappears on refresh)
+    let updatedServices: Service[] = [];
     setServices(prev => {
-      const updated = [completeService, ...prev.filter(s => s.service_id !== completeService.service_id)];
+      updatedServices = [completeService, ...prev.filter(s => s.service_id !== completeService.service_id)];
       try {
-        localStorage.setItem('balaji_services', JSON.stringify(updated));
+        localStorage.setItem('balaji_services', JSON.stringify(updatedServices));
       } catch (e) {}
-      return updated;
+      return updatedServices;
     });
 
     if (completeService.category && !categories.includes(completeService.category)) {
@@ -1021,7 +1049,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 3. Sync to backend API if available
     try {
-      const res = await safeJsonFetch('/api/services', {
+      await safeJsonFetch('/api/services', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1029,16 +1057,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         body: JSON.stringify(completeService)
       });
-      if (res.ok && res.data?.service) {
-        const finalService = res.data.service;
-        setServices(prev => {
-          const list = [finalService, ...prev.filter(s => s.service_id !== finalService.service_id)];
-          try {
-            localStorage.setItem('balaji_services', JSON.stringify(list));
-          } catch (e) {}
-          return list;
-        });
-      }
+      // Push complete list so all other browsers get updated instantly
+      await safeJsonFetch('/api/sync-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ services: updatedServices })
+      });
     } catch (err) {
       console.warn('Network error saving service to server, local record preserved:', err);
     }
@@ -1068,12 +1092,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // 1. Immediate optimistic UI update (0ms delay)
+    let updatedList: Service[] = [];
     setServices(prev => {
-      const list = prev.map(s => s.service_id === id ? { ...s, ...payload, updated_at: new Date().toISOString() } : s);
+      updatedList = prev.map(s => s.service_id === id ? { ...s, ...payload, updated_at: new Date().toISOString() } : s);
       try {
-        localStorage.setItem('balaji_services', JSON.stringify(list));
+        localStorage.setItem('balaji_services', JSON.stringify(updatedList));
       } catch (e) {}
-      return list;
+      return updatedList;
     });
 
     // 2. Direct browser forward to Google Apps Script Web App
@@ -1084,7 +1109,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 3. Persist to Express backend if online
     try {
-      const res = await safeJsonFetch(`/api/services/${encodeURIComponent(id)}`, {
+      await safeJsonFetch(`/api/services/${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -1092,16 +1117,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
         body: JSON.stringify(payload)
       });
-      if (res.ok && res.data?.service) {
-        const updated = res.data.service;
-        setServices(prev => {
-          const list = prev.map(s => s.service_id === id ? { ...s, ...updated } : s);
-          try {
-            localStorage.setItem('balaji_services', JSON.stringify(list));
-          } catch (e) {}
-          return list;
-        });
-      }
+      // Push complete list so all other browsers get updated instantly
+      await safeJsonFetch('/api/sync-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ services: updatedList })
+      });
     } catch (err) {
       console.warn('Network error updating service on server, local update preserved:', err);
     }
@@ -1114,12 +1135,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!id) return false;
 
     // 1. Immediate optimistic UI update (0ms delay)
+    let updatedList: Service[] = [];
     setServices(prev => {
-      const list = prev.filter(s => s.service_id !== id);
+      updatedList = prev.filter(s => s.service_id !== id);
       try {
-        localStorage.setItem('balaji_services', JSON.stringify(list));
+        localStorage.setItem('balaji_services', JSON.stringify(updatedList));
       } catch (e) {}
-      return list;
+      return updatedList;
     });
 
     // 2. Direct browser forward to Google Apps Script Web App
@@ -1134,6 +1156,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await fetch(`/api/services/${encodeURIComponent(id)}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
+      });
+      // Push updated list to server so all other browsers reflect deletion immediately
+      await safeJsonFetch('/api/sync-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ services: updatedList })
       });
     } catch (err) {
       console.warn('Network error deleting service on server, local deletion preserved:', err);
@@ -1243,14 +1271,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSettings(merged);
     try {
       localStorage.setItem('balaji_settings', JSON.stringify(merged));
+      const sUrl = merged.google_sheet_webapp_url || merged.google_sheet_url;
+      if (sUrl) {
+        localStorage.setItem('balaji_sheet_url', sUrl);
+      }
     } catch (e) {}
 
     try {
+      const token = adminToken || localStorage.getItem('balaji_admin_token') || 'balaji_secure_admin_session_token_2026';
       const res = await safeJsonFetch('/api/settings', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${adminToken}`
+          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify(newSettings)
       });
@@ -1258,9 +1291,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSettings(res.data.settings);
         try {
           localStorage.setItem('balaji_settings', JSON.stringify(res.data.settings));
+          if (res.data.settings.google_sheet_webapp_url) {
+            localStorage.setItem('balaji_sheet_url', res.data.settings.google_sheet_webapp_url);
+          }
         } catch (e) {}
-        return true;
       }
+      // Also push to sync-push to ensure all devices and browsers stay updated
+      await safeJsonFetch('/api/sync-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: merged })
+      });
       return true;
     } catch (err) {
       return true;
@@ -1391,6 +1432,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               };
               setSettings(updatedSettings);
               localStorage.setItem('balaji_settings', JSON.stringify(updatedSettings));
+              try { localStorage.setItem('balaji_sheet_url', targetUrl); } catch (e) {}
+
+              // Push immediately to backend server so all browsers receive it in real-time
+              safeJsonFetch('/api/sync-push', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  services: parsedServices,
+                  settings: updatedSettings
+                })
+              }).catch(() => {});
+
               return {
                 success: true,
                 message: `Successfully connected to Google Sheet! Imported ${parsedServices.length} services directly from your sheet.`,
@@ -1503,6 +1556,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSettings(updatedSettings);
         localStorage.setItem('balaji_settings', JSON.stringify(updatedSettings));
         try { localStorage.setItem('balaji_sheet_url', targetUrl); } catch (e) {}
+
+        // Push immediately to backend server so all browsers receive it in real-time
+        safeJsonFetch('/api/sync-push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            services: serviceList,
+            settings: updatedSettings,
+            priceList: parsedData?.data?.priceList,
+            notices: parsedData?.data?.notices,
+            quickLinks: parsedData?.data?.quickLinks,
+            enquiries: parsedData?.data?.enquiries
+          })
+        }).catch(() => {});
+
         return {
           success: true,
           message: `Successfully connected to Google Sheet! Synced ${serviceList.length} services and all sheet tabs directly.`,
@@ -1518,6 +1586,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSettings(updatedSettings);
         localStorage.setItem('balaji_settings', JSON.stringify(updatedSettings));
         try { localStorage.setItem('balaji_sheet_url', targetUrl); } catch (e) {}
+
+        safeJsonFetch('/api/sync-push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            settings: updatedSettings,
+            priceList: parsedData?.data?.priceList,
+            notices: parsedData?.data?.notices,
+            quickLinks: parsedData?.data?.quickLinks
+          })
+        }).catch(() => {});
+
         return {
           success: true,
           message: 'Connected to Google Apps Script Web App! Link verified and saved (All sheet tables synchronized).'

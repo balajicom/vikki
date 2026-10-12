@@ -335,11 +335,17 @@ export const DirectApplicationPage: React.FC = () => {
                     <div className="text-slate-600 leading-relaxed">
                       {language === 'hi' ? selectedService.short_description_hi : selectedService.short_description_en}
                     </div>
-                    {selectedService.required_documents && selectedService.required_documents.length > 0 && (
-                      <div className="pt-1 text-[11px] text-slate-600">
-                        <strong>{t('requiredDocuments')}:</strong> {selectedService.required_documents.join(', ')}
-                      </div>
-                    )}
+                    {(() => {
+                      const docs = Array.isArray(selectedService.required_documents)
+                        ? selectedService.required_documents
+                        : (typeof selectedService.required_documents === 'string' ? (selectedService.required_documents as string).split(/[;\n]+/).map(s => s.trim()).filter(Boolean) : []);
+                      if (docs.length === 0) return null;
+                      return (
+                        <div className="pt-1 text-[11px] text-slate-600">
+                          <strong>{t('requiredDocuments')}:</strong> {docs.join(', ')}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

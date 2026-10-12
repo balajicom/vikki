@@ -57,18 +57,24 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({ service }) => {
         </p>
 
         {/* Quick Documents Preview */}
-        {service.required_documents && service.required_documents.length > 0 && (
-          <div className="bg-slate-50 rounded-lg p-2.5 border border-slate-100 mb-3">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 mb-1">
-              <FileText className="w-3.5 h-3.5 text-blue-600" />
-              <span>{t('requiredDocuments')}:</span>
+        {(() => {
+          const docs = Array.isArray(service.required_documents)
+            ? service.required_documents
+            : (typeof service.required_documents === 'string' ? (service.required_documents as string).split(/[;\n]+/).map(s => s.trim()).filter(Boolean) : []);
+          if (docs.length === 0) return null;
+          return (
+            <div className="bg-slate-50 rounded-lg p-2.5 border border-slate-100 mb-3">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 mb-1">
+                <FileText className="w-3.5 h-3.5 text-blue-600" />
+                <span>{t('requiredDocuments')}:</span>
+              </div>
+              <p className="text-[11px] text-slate-600 truncate">
+                {docs[0]}
+                {docs.length > 1 && ` +${docs.length - 1} more`}
+              </p>
             </div>
-            <p className="text-[11px] text-slate-600 truncate">
-              {service.required_documents[0]}
-              {service.required_documents.length > 1 && ` +${service.required_documents.length - 1} more`}
-            </p>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* Action Buttons Bar */}

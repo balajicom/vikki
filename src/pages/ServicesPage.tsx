@@ -54,22 +54,27 @@ export const ServicesPage: React.FC = () => {
   // Filtered list
   const filteredServices = useMemo(() => {
     return services.filter(service => {
-      // Must be Active for public
-      if (service.status !== 'Active') return false;
+      // Must not be Disabled for public
+      if (service.status && service.status.toLowerCase() === 'disabled') {
+        return false;
+      }
 
       // Category filter
-      if (selectedCategory !== 'All' && service.category !== selectedCategory) {
+      if (selectedCategory !== 'All' && (service.category || '').toLowerCase().trim() !== selectedCategory.toLowerCase().trim()) {
         return false;
       }
 
       // Search text filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const matchEn = service.service_name_en.toLowerCase().includes(q);
-        const matchHi = service.service_name_hi.toLowerCase().includes(q);
-        const matchCat = service.category.toLowerCase().includes(q);
-        const matchDesc = (service.short_description_en + ' ' + service.short_description_hi).toLowerCase().includes(q);
-        const matchDocs = service.required_documents.some(d => d.toLowerCase().includes(q));
+        const matchEn = (service.service_name_en || '').toLowerCase().includes(q);
+        const matchHi = (service.service_name_hi || '').toLowerCase().includes(q);
+        const matchCat = (service.category || '').toLowerCase().includes(q);
+        const matchDesc = ((service.short_description_en || '') + ' ' + (service.short_description_hi || '')).toLowerCase().includes(q);
+        const docs = Array.isArray(service.required_documents)
+          ? service.required_documents
+          : (typeof service.required_documents === 'string' ? [service.required_documents] : []);
+        const matchDocs = docs.some(d => String(d).toLowerCase().includes(q));
         if (!matchEn && !matchHi && !matchCat && !matchDesc && !matchDocs) {
           return false;
         }

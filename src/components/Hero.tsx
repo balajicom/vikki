@@ -6,7 +6,8 @@ import { useData } from '../context/DataContext';
 
 export const Hero: React.FC = () => {
   const { language, t } = useLanguage();
-  const { settings } = useData();
+  const { settings, services } = useData();
+  const activeCount = services.filter(s => !s.status || s.status.toLowerCase() !== 'disabled').length || 16;
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -125,7 +126,7 @@ export const Hero: React.FC = () => {
             <div className="grid grid-cols-3 gap-3 pt-3 max-w-lg border-t border-slate-200/80">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span className="text-xs font-bold text-slate-700">15+ Services</span>
+                <span className="text-xs font-bold text-slate-700">{activeCount}+ Services</span>
               </div>
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />

@@ -528,7 +528,7 @@ app.get('/api/services', (req, res) => {
 
   const services = isAdmin 
     ? db.services 
-    : db.services.filter(s => s.status === 'Active');
+    : db.services.filter(s => !s.status || s.status.toLowerCase() !== 'disabled');
 
   res.json({
     success: true,
@@ -706,6 +706,89 @@ app.get('/api/sync-live', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+// Live multi-browser push endpoint (syncs client changes to backend so all browsers stay updated)
+app.post('/api/sync-push', (req, res) => {
+  const body = req.body || {};
+  let changed = false;
+
+  if (Array.isArray(body.services) && body.services.length > 0) {
+    db.services = body.services.map((s: any, idx: number) => ({
+      service_id: String(s.service_id || `srv-${Date.now().toString(36)}-${idx}`),
+      service_name_en: String(s.service_name_en || s.service_name || 'Service'),
+      service_name_hi: String(s.service_name_hi || s.service_name_en || 'सेवा'),
+      category: String(s.category || 'General Services'),
+      short_description_en: String(s.short_description_en || ''),
+      short_description_hi: String(s.short_description_hi || ''),
+      full_description_en: String(s.full_description_en || ''),
+      full_description_hi: String(s.full_description_hi || ''),
+      required_documents: Array.isArray(s.required_documents)
+        ? s.required_documents
+        : (typeof s.required_documents === 'string' ? s.required_documents.split(/[;\n]+/).map((d: string) => d.trim()).filter(Boolean) : ['Original Aadhaar Card', 'Mobile Number']),
+      icon: s.icon || 'CreditCard',
+      status: (s.status && String(s.status).toLowerCase() === 'disabled') ? 'Disabled' : 'Active',
+      popular: Boolean(s.popular === true || s.popular === 'true' || s.popular === 'yes'),
+      estimated_time: s.estimated_time || '1 to 3 Working Days',
+      whatsapp_message: s.whatsapp_message || `Hello Balaji Communication, I want information about ${s.service_name_en || 'services'}.`,
+      created_at: s.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }));
+    changed = true;
+  }
+
+  if (body.settings && typeof body.settings === 'object') {
+    db.settings = {
+      ...db.settings,
+      ...body.settings
+    };
+    changed = true;
+  }
+
+  if (Array.isArray(body.priceList) && body.priceList.length > 0) {
+    db.priceList = body.priceList;
+    changed = true;
+  }
+
+  if (Array.isArray(body.notices) && body.notices.length > 0) {
+    db.notices = body.notices;
+    changed = true;
+  }
+
+  if (Array.isArray(body.quickLinks) && body.quickLinks.length > 0) {
+    db.quickLinks = body.quickLinks;
+    changed = true;
+  }
+
+  if (Array.isArray(body.enquiries)) {
+    db.enquiries = body.enquiries;
+    changed = true;
+  }
+
+  if (changed) {
+    saveDatabase(db);
+  }
+
+  res.json({
+    success: true,
+    message: "Data synced and persisted to database. All browsers updated.",
+    servicesCount: db.services.length
+  });
+});
+
+// Periodic background sync from Google Sheets if configured (every 25 seconds)
+let isAutoSyncingGoogle = false;
+setInterval(async () => {
+  const target = db.settings.google_sheet_webapp_url || db.settings.google_sheet_url;
+  if (!target || isAutoSyncingGoogle) return;
+  isAutoSyncingGoogle = true;
+  try {
+    await syncFromGoogleSource(target);
+  } catch (err) {
+    // Non-blocking background sync
+  } finally {
+    isAutoSyncingGoogle = false;
+  }
+}, 25000);
 
 // 2. Categories
 app.get('/api/categories', (req, res) => {

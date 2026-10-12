@@ -103,23 +103,28 @@ export const ServiceModal: React.FC = () => {
               </h4>
             </div>
 
-            {selectedService.required_documents && selectedService.required_documents.length > 0 ? (
-              <ul className="space-y-2.5">
-                {selectedService.required_documents.map((doc, idx) => (
-                  <li
-                    key={idx}
-                    className="flex items-start gap-2.5 p-2.5 bg-slate-50 hover:bg-blue-50/50 rounded-lg border border-slate-200/60 text-xs sm:text-sm text-slate-700 transition-colors"
-                  >
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span className="font-medium">{doc}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-xs text-slate-500 italic">
-                Standard identity proof and active mobile phone required. Contact center for exact details.
-              </p>
-            )}
+            {(() => {
+              const docs = Array.isArray(selectedService.required_documents)
+                ? selectedService.required_documents
+                : (typeof selectedService.required_documents === 'string' ? (selectedService.required_documents as string).split(/[;\n]+/).map(s => s.trim()).filter(Boolean) : []);
+              return docs.length > 0 ? (
+                <ul className="space-y-2.5">
+                  {docs.map((doc, idx) => (
+                    <li
+                      key={idx}
+                      className="flex items-start gap-2.5 p-2.5 bg-slate-50 hover:bg-blue-50/50 rounded-lg border border-slate-200/60 text-xs sm:text-sm text-slate-700 transition-colors"
+                    >
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <span className="font-medium">{doc}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-slate-500 italic">
+                  Standard identity proof and active mobile phone required. Contact center for exact details.
+                </p>
+              );
+            })()}
           </div>
 
           {/* Important Legal & Government Notice */}
