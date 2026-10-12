@@ -39,6 +39,16 @@
       ]
     }
     </script>
+    <script>
+      // Fix GitHub Pages subdirectory URLs without trailing slashes (/vikki -> /vikki/)
+      // Ensures relative assets './assets/...' always resolve relative to the directory
+      (function() {
+        var p = window.location.pathname;
+        if (p && !p.endsWith('/') && !p.split('/').pop().includes('.')) {
+          window.location.replace(p + '/' + window.location.search + window.location.hash);
+        }
+      })();
+    </script>
   </head>
   <body class="bg-slate-50 text-slate-900 antialiased font-sans">
     <div id="root"></div>

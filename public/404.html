@@ -5,27 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Balaji Communication | Jan Seva Kendra</title>
     <script>
-      // Single Page Application (SPA) redirect for GitHub Pages
-      // Redirects non-hash routes like /vikki/services to /vikki/#/services
+      // Single Page Application (SPA) redirect for GitHub Pages (/vikki/)
+      // Correctly redirects deep links to HashRouter without double slashes
       (function() {
-        var path = window.location.pathname;
-        var repoName = '/vikki';
-        
-        // Remove repoName from start of path if present
-        if (path.indexOf(repoName) === 0) {
-          path = path.slice(repoName.length);
-        }
-        
-        // Normalize path
-        if (!path || !path.startsWith('/')) {
-          path = '/' + (path || '');
-        }
-
+        var pathname = window.location.pathname || '/';
         var search = window.location.search || '';
         var hash = window.location.hash || '';
 
-        // Target URL with hash
-        var targetUrl = window.location.origin + repoName + '/#' + path + search + hash;
+        var segments = pathname.split('/').filter(Boolean);
+        var repoPrefix = '';
+        var innerPath = '';
+
+        if (segments.length > 0 && segments[0] === 'vikki') {
+          repoPrefix = '/vikki';
+          innerPath = '/' + segments.slice(1).join('/');
+        } else if (segments.length > 0) {
+          repoPrefix = '/' + segments[0];
+          innerPath = '/' + segments.slice(1).join('/');
+        } else {
+          repoPrefix = '';
+          innerPath = '/';
+        }
+
+        if (innerPath === '/' || innerPath === '/index.html' || innerPath === '') {
+          innerPath = '/';
+        }
+
+        var targetUrl = window.location.origin + repoPrefix + '/#' + innerPath + search + hash;
         window.location.replace(targetUrl);
       })();
     </script>

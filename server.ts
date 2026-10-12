@@ -1410,18 +1410,49 @@ async function startServer() {
         watch: {
           ignored: [
             '**/data/**',
+            '**/data/*',
             '**/public/**',
             '**/dist/**',
+            '**/vikki/**',
+            '**/docs/**',
             '**/*.json',
             '**/node_modules/**',
+            (p: string) => typeof p === 'string' && (
+              p.includes('/data/') ||
+              p.includes('/public/') ||
+              p.includes('/dist/') ||
+              p.includes('/vikki/') ||
+              p.includes('/docs/') ||
+              p.endsWith('.json')
+            ),
           ],
         },
       },
       appType: "spa",
     });
+
+    // Explicitly unwatch data and generated directories to prevent browser page reloads when saving services
+    try {
+      if (vite.watcher) {
+        vite.watcher.unwatch([
+          DATA_DIR,
+          DB_FILE,
+          path.join(process.cwd(), 'data'),
+          path.join(process.cwd(), 'public'),
+          path.join(process.cwd(), 'dist'),
+          path.join(process.cwd(), 'vikki'),
+          path.join(process.cwd(), 'docs'),
+        ]);
+      }
+    } catch (e) {}
+
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
+    const vikkiPath = path.join(process.cwd(), 'vikki');
+    if (fs.existsSync(vikkiPath)) {
+      app.use('/vikki', express.static(vikkiPath));
+    }
     app.use('/vikki', express.static(distPath));
     app.use(express.static(distPath));
     app.get('*', (req, res) => {

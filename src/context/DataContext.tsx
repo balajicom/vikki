@@ -484,8 +484,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Check for static config.json deployed on GitHub Pages
         try {
-          const cfgRes = await fetch('./config.json');
-          if (cfgRes.ok) {
+          const baseUrl = (import.meta as any)?.env?.BASE_URL || './';
+          const configUrl = baseUrl.endsWith('/') ? `${baseUrl}config.json` : `${baseUrl}/config.json`;
+          let cfgRes = await fetch(configUrl).catch(() => null);
+          if (!cfgRes || !cfgRes.ok) {
+            cfgRes = await fetch('./config.json').catch(() => null);
+          }
+          if (!cfgRes || !cfgRes.ok) {
+            cfgRes = await fetch('/vikki/config.json').catch(() => null);
+          }
+          if (cfgRes && cfgRes.ok) {
             const cfg = await cfgRes.json();
             if (cfg?.google_sheet_webapp_url && !localSettings.google_sheet_webapp_url) {
               localSettings.google_sheet_webapp_url = cfg.google_sheet_webapp_url;
