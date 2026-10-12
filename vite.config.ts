@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { defineConfig } from 'vite';
 
-<<<<<<< HEAD
+
 export default defineConfig(({ command }) => {
   // Use relative base './' for universal compatibility across GitHub Pages (/vikki/),
   // custom domains, root deployments, or subdirectories, preventing blank page issues.
