@@ -89,6 +89,8 @@ function loadDatabase(): DatabaseSchema {
   return initialDb;
 }
 
+let lastSyncedSheetUrl: string | null = null;
+
 function saveDatabase(database: DatabaseSchema) {
   try {
     if (!fs.existsSync(DATA_DIR)) {
@@ -96,23 +98,26 @@ function saveDatabase(database: DatabaseSchema) {
     }
     fs.writeFileSync(DB_FILE, JSON.stringify(database, null, 2));
 
-    // Automatically sync Google Sheet URL to public/config.json for GitHub Pages
-    try {
-      const sheetUrl = database.settings.google_sheet_webapp_url || database.settings.google_sheet_url || '';
-      const pubConfig = path.join(process.cwd(), 'public', 'config.json');
-      fs.writeFileSync(pubConfig, JSON.stringify({
-        google_sheet_webapp_url: sheetUrl,
-        last_updated: new Date().toISOString()
-      }, null, 2));
-
-      const distConfig = path.join(process.cwd(), 'dist', 'config.json');
-      if (fs.existsSync(path.dirname(distConfig))) {
-        fs.writeFileSync(distConfig, JSON.stringify({
+    // Only update public/config.json when the Google Sheet URL actually changes
+    const sheetUrl = database.settings.google_sheet_webapp_url || database.settings.google_sheet_url || '';
+    if (sheetUrl && sheetUrl !== lastSyncedSheetUrl) {
+      lastSyncedSheetUrl = sheetUrl;
+      try {
+        const pubConfig = path.join(process.cwd(), 'public', 'config.json');
+        fs.writeFileSync(pubConfig, JSON.stringify({
           google_sheet_webapp_url: sheetUrl,
           last_updated: new Date().toISOString()
         }, null, 2));
-      }
-    } catch (cfgErr) {}
+
+        const distConfig = path.join(process.cwd(), 'dist', 'config.json');
+        if (fs.existsSync(path.dirname(distConfig))) {
+          fs.writeFileSync(distConfig, JSON.stringify({
+            google_sheet_webapp_url: sheetUrl,
+            last_updated: new Date().toISOString()
+          }, null, 2));
+        }
+      } catch (cfgErr) {}
+    }
   } catch (err) {
     console.error('Error saving db.json:', err);
   }
@@ -1399,7 +1404,19 @@ app.post('/api/import-csv', checkAdminAuth, (req, res) => {
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+        watch: {
+          ignored: [
+            '**/data/**',
+            '**/public/**',
+            '**/dist/**',
+            '**/*.json',
+            '**/node_modules/**',
+          ],
+        },
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);

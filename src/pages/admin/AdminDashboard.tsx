@@ -193,8 +193,11 @@ export const AdminDashboard: React.FC = () => {
   };
 
   // Save Service
-  const handleSaveService = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveService = async (e?: React.FormEvent | React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     setServiceError(null);
 
     const nameEn = serviceForm.service_name_en?.trim() || '';
@@ -1644,9 +1647,10 @@ export const AdminDashboard: React.FC = () => {
 
               <div className="pt-2">
                 <button
-                  type="submit"
+                  type="button"
                   id="btn-save-settings"
-                  className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold rounded-xl shadow-xs transition-colors"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleSaveSettings(e); }}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
                 >
                   <Save className="w-4 h-4" />
                   <span>Save Center Settings</span>
@@ -2218,7 +2222,7 @@ export const AdminDashboard: React.FC = () => {
               </div>
             )}
 
-            <form onSubmit={handleSaveService} className="space-y-4">
+            <form onSubmit={(e) => { e.preventDefault(); e.stopPropagation(); handleSaveService(e); }} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -2399,9 +2403,10 @@ export const AdminDashboard: React.FC = () => {
                   Cancel
                 </button>
                 <button
-                  type="submit"
+                  type="button"
                   id="btn-modal-save-service"
                   disabled={isSavingService}
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleSaveService(e); }}
                   className="px-5 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-lg shadow-xs flex items-center gap-1.5 disabled:opacity-60 cursor-pointer"
                 >
                   {isSavingService ? (
