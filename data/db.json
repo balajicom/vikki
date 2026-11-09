@@ -357,7 +357,26 @@
       "updated_at": "2026-01-10T10:00:00.000Z"
     }
   ],
-  "enquiries": [],
+  "enquiries": [
+    {
+      "enquiry_id": "BALAJI-APP-MW8RNTYJ",
+      "customer_name": "hhhhhhhh",
+      "applicant_name": "hhhhhhhh",
+      "mobile": "8555555555",
+      "father_or_husband_name": "bvgggg",
+      "address": "hhhhhhhhhhhhhhhhhh",
+      "village": "Gaini",
+      "service_id": "srv-custom-mw8re3fj",
+      "service_name": "DDDDDD",
+      "category": "Other Digital Services",
+      "message": "hhhhhhhhhhhhhhhhhh",
+      "preferred_contact": "WhatsApp",
+      "status": "New",
+      "urgency": "Normal",
+      "created_at": "2026-11-09T04:33:56.279Z",
+      "updated_at": "2026-11-09T04:33:56.279Z"
+    }
+  ],
   "settings": {
     "business_name_en": "Balaji Communication",
     "business_name_hi": "बालाजी कम्युनिकेशन",

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Shield, Lock, Mail, AlertCircle, ArrowRight } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 
@@ -7,7 +7,7 @@ export const AdminLogin: React.FC = () => {
   const { loginAdmin, isAdminLoggedIn } = useData();
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState('admin@balaji.com');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +47,7 @@ export const AdminLogin: React.FC = () => {
             Balaji Admin Portal
           </h1>
           <p className="text-xs text-slate-500 font-medium">
-            Jan Seva Kendra Management & Google Sheets Sync
+            Jan Seva Kendra Admin Portal
           </p>
         </div>
 
@@ -113,8 +113,14 @@ export const AdminLogin: React.FC = () => {
           </button>
         </form>
 
-        <div className="text-center text-xs text-slate-500 pt-2 border-t border-slate-100">
-          <p>Protected route. Authorized access only.</p>
+        <div className="flex items-center justify-between text-xs text-slate-500 pt-3 border-t border-slate-100">
+          <Link
+            to="/"
+            className="text-blue-700 hover:text-blue-800 font-semibold flex items-center gap-1 transition-colors"
+          >
+            ← Back to Services
+          </Link>
+          <span>Authorized Access Only</span>
         </div>
 
       </div>

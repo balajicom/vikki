@@ -15,36 +15,22 @@ import {
   ExternalLink,
   Copy,
   Check,
-  RefreshCw,
   LogOut,
   Save,
-  AlertTriangle,
   AlertCircle,
   Search,
   Eye,
-  EyeOff,
-  Download,
-  UploadCloud,
-  Table,
-  FileText,
+  X,
   CheckCircle2,
-  HelpCircle,
   ArrowRight,
-  Sparkles,
-  CreditCard,
-  Users,
-  Heart,
-  Smartphone,
-  Tag,
-  Bell,
-  Globe,
-  X
+  Image as ImageIcon,
+  Send,
+  Sparkles
 } from 'lucide-react';
 import { useData, sendApplicationToGoogleSheets } from '../../context/DataContext';
-import { Service, Enquiry, SiteSettings, SheetTemplateInfo } from '../../types';
+import { Service, Enquiry, WebsiteSettings, EnquiryStatus } from '../../types';
 import { getServiceIcon } from '../../utils/iconHelper';
 import { GOOGLE_APPS_SCRIPT_CODE } from '../../data/googleAppsScriptCode';
-import { SHEET_TEMPLATES, downloadCsvTemplate, generateTabSeparatedContent } from '../../data/sheetTemplates';
 
 export const AdminDashboard: React.FC = () => {
   const {
@@ -54,10 +40,6 @@ export const AdminDashboard: React.FC = () => {
     enquiries,
     settings,
     categories,
-    priceList,
-    notices,
-    quickLinks,
-    citizens,
     clearAllEnquiries,
     addService,
     createService,
@@ -67,15 +49,13 @@ export const AdminDashboard: React.FC = () => {
     deleteEnquiry,
     updateSettings,
     syncWithGoogleSheets,
-    importCsvData,
-    lastLiveSyncTime,
-    isLiveAutoSyncing
+    openAddServiceModal
   } = useData();
 
   const navigate = useNavigate();
 
-  // Active Tab
-  const [activeTab, setActiveTab] = useState<'services' | 'enquiries' | 'pricelist' | 'notices' | 'quicklinks' | 'citizens' | 'settings' | 'sheets'>('services');
+  // Active Tab: Focused on Services, Citizen Enquiries, Google Sheet Enquiry Store, Center Settings
+  const [activeTab, setActiveTab] = useState<'services' | 'enquiries' | 'sheets' | 'settings'>('services');
 
   // Service Edit / Create Modal State
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
@@ -87,6 +67,7 @@ export const AdminDashboard: React.FC = () => {
   const [serviceForm, setServiceForm] = useState<Partial<Service>>({
     service_id: '',
     category: 'Aadhaar',
+    image_url: '',
     service_name_en: '',
     service_name_hi: '',
     short_description_en: '',
@@ -103,39 +84,26 @@ export const AdminDashboard: React.FC = () => {
   const [docsInput, setDocsInput] = useState('');
 
   // Settings Form State
-  const [settingsForm, setSettingsForm] = useState<SiteSettings>(settings);
+  const [settingsForm, setSettingsForm] = useState<WebsiteSettings>(settings);
   const [settingsSavedMsg, setSettingsSavedMsg] = useState(false);
 
   // Google Sheets Tab State
   const [sheetsUrlInput, setSheetsUrlInput] = useState(
-    settings.google_sheet_webapp_url || settings.google_sheet_web_app_url || settings.google_sheet_url || localStorage.getItem('balaji_sheet_url') || ''
+    settings.google_sheet_webapp_url || (settings as any).google_sheet_web_app_url || (settings as any).google_sheet_url || localStorage.getItem('balaji_sheet_url') || ''
   );
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
+  const [isConnectingSheet, setIsConnectingSheet] = useState(false);
+  const [sheetStatusMsg, setSheetStatusMsg] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
-  const [copiedEnv, setCopiedEnv] = useState(false);
+  const [isTestingDispatch, setIsTestingDispatch] = useState(false);
+  const [testDispatchSuccess, setTestDispatchSuccess] = useState<string | null>(null);
 
-  // Google Sheet & CSV Templates State
-  const [selectedTemplateForPreview, setSelectedTemplateForPreview] = useState<SheetTemplateInfo | null>(null);
-  const [copiedTemplateId, setCopiedTemplateId] = useState<string | null>(null);
-  const [isImportingFile, setIsImportingFile] = useState(false);
-  const [activeImportingId, setActiveImportingId] = useState<string | null>(null);
-  const [importStatusBanner, setImportStatusBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [templateFilterCategory, setTemplateFilterCategory] = useState<string>('all');
-
-  // Search & Filters for Enquiries & Citizen Details Modal
+  // Search & Filters for Enquiries
   const [enquiryFilterStatus, setEnquiryFilterStatus] = useState<string>('All');
+  const [enquirySearchTerm, setEnquirySearchTerm] = useState('');
   const [serviceSearchTerm, setServiceSearchTerm] = useState('');
   const [selectedEnquiryForDetails, setSelectedEnquiryForDetails] = useState<Enquiry | null>(null);
   const [enquiryToDelete, setEnquiryToDelete] = useState<Enquiry | null>(null);
   const [isClearEnquiriesModalOpen, setIsClearEnquiriesModalOpen] = useState(false);
-  const [isClearingEnquiries, setIsClearingEnquiries] = useState(false);
-
-  // Filters for Attached Sheet Tabs
-  const [priceSearchTerm, setPriceSearchTerm] = useState('');
-  const [priceCategoryFilter, setPriceCategoryFilter] = useState('All');
-  const [quickLinkSearchTerm, setQuickLinkSearchTerm] = useState('');
-  const [citizenSearchTerm, setCitizenSearchTerm] = useState('');
 
   // Protect Admin route
   React.useEffect(() => {
@@ -146,13 +114,13 @@ export const AdminDashboard: React.FC = () => {
 
   React.useEffect(() => {
     setSettingsForm(settings);
-    const activeUrl = settings.google_sheet_webapp_url || settings.google_sheet_web_app_url || settings.google_sheet_url || localStorage.getItem('balaji_sheet_url') || '';
+    const activeUrl = settings.google_sheet_webapp_url || (settings as any).google_sheet_web_app_url || (settings as any).google_sheet_url || localStorage.getItem('balaji_sheet_url') || '';
     if (activeUrl) {
       setSheetsUrlInput(activeUrl);
     }
   }, [settings]);
 
-  // Metrics Calculations
+  // Metrics
   const totalServices = services.length;
   const activeServices = services.filter(s => s.status === 'Active').length;
   const totalEnquiries = enquiries.length;
@@ -165,21 +133,22 @@ export const AdminDashboard: React.FC = () => {
     setServiceError(null);
     setServiceForm({
       service_id: `srv-${Date.now().toString(36)}`,
-      category: categories[0] || 'General Services',
+      category: categories[0] || 'Aadhaar',
+      image_url: 'https://images.unsplash.com/photo-1450133064473-71024230f91b?auto=format&fit=crop&w=800&q=80',
       service_name_en: '',
       service_name_hi: '',
       short_description_en: '',
       short_description_hi: '',
       full_description_en: '',
       full_description_hi: '',
-      required_documents: [],
+      required_documents: ['Original Aadhaar Card', 'Mobile Number'],
       estimated_time: '1 to 3 Working Days',
       status: 'Active',
       popular: false,
       icon: 'CreditCard',
       whatsapp_message: ''
     });
-    setDocsInput('');
+    setDocsInput('Original Aadhaar Card\nMobile Number');
     setIsServiceModalOpen(true);
   };
 
@@ -192,7 +161,7 @@ export const AdminDashboard: React.FC = () => {
     setIsServiceModalOpen(true);
   };
 
-  // Save Service
+  // Save Service (Handles creation and update with image_url)
   const handleSaveService = async (e?: React.FormEvent | React.MouseEvent) => {
     if (e) {
       e.preventDefault();
@@ -223,11 +192,12 @@ export const AdminDashboard: React.FC = () => {
         service_name_en: finalNameEn,
         service_name_hi: finalNameHi,
         category: serviceForm.category?.trim() || categories[0] || 'General Services',
+        image_url: serviceForm.image_url?.trim() || 'https://images.unsplash.com/photo-1450133064473-71024230f91b?auto=format&fit=crop&w=800&q=80',
         short_description_en: serviceForm.short_description_en?.trim() || serviceForm.short_description_hi?.trim() || '',
         short_description_hi: serviceForm.short_description_hi?.trim() || serviceForm.short_description_en?.trim() || '',
         full_description_en: serviceForm.full_description_en?.trim() || serviceForm.short_description_en?.trim() || '',
         full_description_hi: serviceForm.full_description_hi?.trim() || serviceForm.short_description_hi?.trim() || '',
-        required_documents: docs.length > 0 ? docs : ['Original Aadhaar Card', 'Registered Mobile Number'],
+        required_documents: docs.length > 0 ? docs : ['Original Aadhaar Card', 'Mobile Number'],
         icon: serviceForm.icon || 'CreditCard',
         status: (serviceForm.status as 'Active' | 'Disabled') || 'Active',
         popular: Boolean(serviceForm.popular),
@@ -247,7 +217,7 @@ export const AdminDashboard: React.FC = () => {
 
       if (success) {
         setIsServiceModalOpen(false);
-        setServiceSuccessToast(editingServiceId ? 'Service updated successfully!' : 'New service added and published live successfully!');
+        setServiceSuccessToast(editingServiceId ? 'Service updated successfully!' : 'New service added with picture and published live!');
         setTimeout(() => setServiceSuccessToast(null), 4000);
       } else {
         setServiceError('Could not save service. Please verify fields and try again.');
@@ -268,7 +238,7 @@ export const AdminDashboard: React.FC = () => {
     setTimeout(() => setServiceSuccessToast(null), 3000);
   };
 
-  // Safe delete handler without window.confirm
+  // Delete Service
   const handleConfirmDeleteService = async () => {
     if (!serviceToDelete) return;
     const name = serviceToDelete.service_name_en;
@@ -282,19 +252,18 @@ export const AdminDashboard: React.FC = () => {
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     const res = await updateSettings(settingsForm);
-    if (res.success) {
+    if (res) {
       setSettingsSavedMsg(true);
       setTimeout(() => setSettingsSavedMsg(false), 3000);
     }
   };
 
-  // Save Sheets URL & Trigger Sync
-  const handleSyncSheets = async () => {
-    setIsSyncing(true);
-    setSyncStatusMsg(null);
+  // Connect Google Sheet for Enquiries
+  const handleConnectSheet = async () => {
+    setIsConnectingSheet(true);
+    setSheetStatusMsg(null);
     const trimmed = sheetsUrlInput.trim();
     if (trimmed) {
-      // Save to settings permanently
       await updateSettings({
         google_sheet_webapp_url: trimmed,
         google_sheet_url: trimmed
@@ -304,227 +273,178 @@ export const AdminDashboard: React.FC = () => {
       } catch (e) {}
     }
     const res = await syncWithGoogleSheets(trimmed);
-    setIsSyncing(false);
-    setSyncStatusMsg(res.message);
+    setIsConnectingSheet(false);
+    setSheetStatusMsg(res.message);
   };
 
-  // Download config.json for GitHub Pages deployment
-  const handleDownloadConfigJson = () => {
-    const configData = {
-      google_sheet_webapp_url: sheetsUrlInput.trim(),
-      last_updated: new Date().toISOString()
+  // Send Test Enquiry to Google Sheet
+  const handleSendTestEnquiry = async () => {
+    const targetUrl = sheetsUrlInput.trim();
+    if (!targetUrl || !targetUrl.includes('script.google.com')) {
+      setTestDispatchSuccess('Please enter a valid Google Apps Script Web App URL ending in /exec first.');
+      return;
+    }
+    setIsTestingDispatch(true);
+    setTestDispatchSuccess(null);
+    const testEnquiry: Enquiry = {
+      enquiry_id: `BALAJI-TEST-${Date.now().toString(36).toUpperCase()}`,
+      customer_name: 'Test Citizen (Enquiry Storage Verification)',
+      applicant_name: 'Test Citizen',
+      mobile: '9870677605',
+      service_name: 'Aadhaar Card Service Test',
+      category: 'Aadhaar',
+      village: 'Gaini',
+      address: 'Near Masjid, Gaini, Bareilly',
+      message: 'This is a test enquiry verifying that user enquiries are stored directly in your single Google Sheet.',
+      preferred_contact: 'Call',
+      urgency: 'Normal',
+      status: 'New',
+      created_at: new Date().toISOString()
     };
-    const blob = new Blob([JSON.stringify(configData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'config.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
 
-  const handleCopyEnvConfig = () => {
-    const envLine = `VITE_GOOGLE_SHEET_WEBAPP_URL="${sheetsUrlInput.trim()}"`;
-    navigator.clipboard.writeText(envLine);
-    setCopiedEnv(true);
-    setTimeout(() => setCopiedEnv(false), 2500);
-  };
-
-  // Copy Google Apps Script code
-  const handleCopyScriptCode = () => {
-    navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_CODE);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2500);
-  };
-
-  // Copy Template Headers & Sample Row for Direct Paste in Google Sheets (Ctrl+V)
-  const handleCopyTemplateHeaders = (template: SheetTemplateInfo) => {
-    try {
-      const tsv = generateTabSeparatedContent(template);
-      navigator.clipboard.writeText(tsv);
-      setCopiedTemplateId(template.id);
-      setTimeout(() => setCopiedTemplateId(null), 3000);
-    } catch (err) {
-      console.error('Failed to copy to clipboard:', err);
+    const sent = await sendApplicationToGoogleSheets(targetUrl, testEnquiry);
+    setIsTestingDispatch(false);
+    if (sent) {
+      setTestDispatchSuccess(`Test enquiry dispatched! Check your Google Sheet "Enquiries" tab for Reference ID: ${testEnquiry.enquiry_id}`);
+    } else {
+      setTestDispatchSuccess('Could not send test enquiry. Please verify your Web App URL has "Who has access: Anyone".');
     }
   };
 
-  // Direct CSV File Upload Handler
-  const handleFileUpload = async (templateId: string, event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setIsImportingFile(true);
-    setActiveImportingId(templateId);
-    setImportStatusBanner(null);
-
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const text = e.target?.result as string;
-        if (!text || !text.trim()) {
-          setImportStatusBanner({ type: 'error', message: 'Selected file is empty.' });
-          setIsImportingFile(false);
-          setActiveImportingId(null);
-          return;
-        }
-
-        const res = await importCsvData(templateId, text);
-        if (res.success) {
-          setImportStatusBanner({ type: 'success', message: res.message });
-        } else {
-          setImportStatusBanner({ type: 'error', message: res.message });
-        }
-      } catch (err: any) {
-        setImportStatusBanner({ type: 'error', message: err.message || 'Failed to process CSV file.' });
-      } finally {
-        setIsImportingFile(false);
-        setActiveImportingId(null);
-        event.target.value = '';
-      }
-    };
-    reader.onerror = () => {
-      setImportStatusBanner({ type: 'error', message: 'Could not read file from disk.' });
-      setIsImportingFile(false);
-      setActiveImportingId(null);
-      event.target.value = '';
-    };
-    reader.readAsText(file);
+  const handleCopyScriptCode = () => {
+    navigator.clipboard.writeText(GOOGLE_APPS_SCRIPT_CODE);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 3000);
   };
 
-  // Filtered Enquiries
-  const filteredEnquiries = enquiries.filter(enq => {
-    if (enquiryFilterStatus === 'All') return true;
-    return enq.status === enquiryFilterStatus;
-  });
-
-  // Filtered Services in Admin list
+  // Filtered Services
   const filteredServices = services.filter(s => {
     if (!serviceSearchTerm.trim()) return true;
     const q = serviceSearchTerm.toLowerCase();
-    return s.service_name_en.toLowerCase().includes(q) ||
-           s.service_name_hi.toLowerCase().includes(q) ||
-           s.category.toLowerCase().includes(q);
+    return (
+      (s.service_name_en || '').toLowerCase().includes(q) ||
+      (s.service_name_hi || '').toLowerCase().includes(q) ||
+      (s.category || '').toLowerCase().includes(q)
+    );
+  });
+
+  // Filtered Enquiries
+  const filteredEnquiries = enquiries.filter(enq => {
+    const matchesStatus = enquiryFilterStatus === 'All' || enq.status === enquiryFilterStatus;
+    const matchesSearch = !enquirySearchTerm.trim() ||
+      (enq.customer_name || '').toLowerCase().includes(enquirySearchTerm.toLowerCase()) ||
+      (enq.applicant_name || '').toLowerCase().includes(enquirySearchTerm.toLowerCase()) ||
+      (enq.mobile || '').includes(enquirySearchTerm) ||
+      (enq.service_name || '').toLowerCase().includes(enquirySearchTerm.toLowerCase()) ||
+      (enq.enquiry_id || '').toLowerCase().includes(enquirySearchTerm.toLowerCase());
+    return matchesStatus && matchesSearch;
   });
 
   return (
-    <div id="admin-dashboard-page" className="min-h-screen bg-slate-100 py-8 px-4 sm:px-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        
-        {/* Top Bar Header */}
-        <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-xl bg-blue-700 text-white flex items-center justify-center font-bold text-lg shadow-sm">
+    <div id="admin-dashboard-page" className="min-h-screen bg-slate-100 pb-16">
+      {/* Top Navbar */}
+      <header className="bg-slate-900 text-white sticky top-0 z-30 shadow-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Link to="/" className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-base shadow-xs hover:bg-blue-500 transition-colors">
               BC
-            </div>
+            </Link>
             <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl font-extrabold text-slate-900">
+              <div className="flex items-center gap-2">
+                <h1 className="font-extrabold text-sm sm:text-base tracking-tight text-white">
                   Balaji Admin Control Center
                 </h1>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] font-bold bg-emerald-50 text-emerald-800 rounded-full border border-emerald-300 shadow-2xs">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  Multi-Browser Live Auto-Sync Active {lastLiveSyncTime ? `(${lastLiveSyncTime})` : ''}
+                <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-400 text-slate-950 rounded uppercase tracking-wider">
+                  Admin
                 </span>
               </div>
-              <p className="text-xs text-slate-500">
-                Manage Jan Seva Kendra services, citizen enquiries & Google Sheets synchronization
+              <p className="text-[11px] text-slate-400 hidden sm:block">
+                Jan Seva Kendra Services & Single-Sheet Enquiry Management
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Link
               to="/"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors border border-slate-200"
+              className="text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-1.5 transition-colors hidden sm:flex"
             >
+              <span>View Portal</span>
               <ExternalLink className="w-3.5 h-3.5" />
-              <span>View Website</span>
             </Link>
             <button
               type="button"
-              id="btn-admin-logout"
-              onClick={() => {
-                logoutAdmin();
-                navigate('/admin/login');
-              }}
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors"
+              onClick={logoutAdmin}
+              className="px-3 py-1.5 bg-slate-800 hover:bg-rose-900/60 text-slate-200 hover:text-white text-xs font-bold rounded-lg border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>Logout</span>
             </button>
           </div>
         </div>
+      </header>
 
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        
         {/* Metric Cards Row */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-            <span className="text-xs text-slate-500 font-semibold block">Total Services</span>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs">
+            <span className="text-xs text-slate-500 font-bold block">Total Services</span>
             <div className="flex items-baseline justify-between mt-1">
-              <span className="text-2xl font-extrabold text-slate-900">{totalServices}</span>
+              <span className="text-2xl sm:text-3xl font-black text-slate-900">{totalServices}</span>
               <Layers className="w-5 h-5 text-blue-600 opacity-60" />
             </div>
           </div>
 
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-            <span className="text-xs text-slate-500 font-semibold block">Active Services</span>
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs">
+            <span className="text-xs text-slate-500 font-bold block">Active Services</span>
             <div className="flex items-baseline justify-between mt-1">
-              <span className="text-2xl font-extrabold text-emerald-700">{activeServices}</span>
+              <span className="text-2xl sm:text-3xl font-black text-emerald-700">{activeServices}</span>
               <CheckCircle className="w-5 h-5 text-emerald-600 opacity-60" />
             </div>
           </div>
 
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-            <span className="text-xs text-slate-500 font-semibold block">Total Enquiries</span>
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs">
+            <span className="text-xs text-slate-500 font-bold block">Citizen Enquiries</span>
             <div className="flex items-baseline justify-between mt-1">
-              <span className="text-2xl font-extrabold text-slate-900">{totalEnquiries}</span>
+              <span className="text-2xl sm:text-3xl font-black text-slate-900">{totalEnquiries}</span>
               <Inbox className="w-5 h-5 text-indigo-600 opacity-60" />
             </div>
           </div>
 
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
-            <span className="text-xs text-slate-500 font-semibold block">New / Pending</span>
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs">
+            <span className="text-xs text-slate-500 font-bold block">Pending / New</span>
             <div className="flex items-baseline justify-between mt-1">
-              <span className="text-2xl font-extrabold text-amber-600">{pendingEnquiries}</span>
+              <span className="text-2xl sm:text-3xl font-black text-amber-600">{pendingEnquiries}</span>
               <Clock className="w-5 h-5 text-amber-500 opacity-60" />
-            </div>
-          </div>
-
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs col-span-2 sm:col-span-1">
-            <span className="text-xs text-slate-500 font-semibold block">Completed</span>
-            <div className="flex items-baseline justify-between mt-1">
-              <span className="text-2xl font-extrabold text-blue-700">{completedEnquiries}</span>
-              <CheckCircle className="w-5 h-5 text-blue-600 opacity-60" />
             </div>
           </div>
         </div>
 
-        {/* Tab Navigation Navigation */}
-        <div className="bg-white rounded-xl border border-slate-200 p-1.5 flex gap-1 overflow-x-auto shadow-2xs">
+        {/* Tab Navigation */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-1.5 flex gap-1.5 overflow-x-auto shadow-2xs">
           <button
             type="button"
             id="tab-services"
             onClick={() => setActiveTab('services')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'services'
                 ? 'bg-blue-700 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
+                : 'text-slate-700 hover:bg-slate-100'
             }`}
           >
             <Layers className="w-4 h-4" />
-            <span>Services ({totalServices})</span>
+            <span>Services Management ({totalServices})</span>
           </button>
 
           <button
             type="button"
             id="tab-enquiries"
             onClick={() => setActiveTab('enquiries')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'enquiries'
                 ? 'bg-blue-700 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
+                : 'text-slate-700 hover:bg-slate-100'
             }`}
           >
             <Inbox className="w-4 h-4" />
@@ -533,281 +453,253 @@ export const AdminDashboard: React.FC = () => {
 
           <button
             type="button"
-            id="tab-pricelist"
-            onClick={() => setActiveTab('pricelist')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
-              activeTab === 'pricelist'
-                ? 'bg-blue-700 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
+            id="tab-sheets"
+            onClick={() => setActiveTab('sheets')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === 'sheets'
+                ? 'bg-emerald-700 text-white shadow-xs'
+                : 'text-slate-700 hover:bg-slate-100'
             }`}
           >
-            <Tag className="w-4 h-4" />
-            <span>Rate List & Fees ({priceList?.length || 0})</span>
-          </button>
-
-          <button
-            type="button"
-            id="tab-notices"
-            onClick={() => setActiveTab('notices')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
-              activeTab === 'notices'
-                ? 'bg-blue-700 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <Bell className="w-4 h-4" />
-            <span>Notice Board ({notices?.length || 0})</span>
-          </button>
-
-          <button
-            type="button"
-            id="tab-quicklinks"
-            onClick={() => setActiveTab('quicklinks')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
-              activeTab === 'quicklinks'
-                ? 'bg-blue-700 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <Globe className="w-4 h-4" />
-            <span>Govt Portals ({quickLinks?.length || 0})</span>
-          </button>
-
-          <button
-            type="button"
-            id="tab-citizens"
-            onClick={() => setActiveTab('citizens')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
-              activeTab === 'citizens'
-                ? 'bg-blue-700 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>Citizens Registry ({citizens?.length || 0})</span>
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Google Sheet Enquiry Store</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+              activeTab === 'sheets' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
+            }`}>
+              Single Sheet
+            </span>
           </button>
 
           <button
             type="button"
             id="tab-settings"
             onClick={() => setActiveTab('settings')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'settings'
                 ? 'bg-blue-700 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
+                : 'text-slate-700 hover:bg-slate-100'
             }`}
           >
             <SettingsIcon className="w-4 h-4" />
             <span>Center Settings</span>
           </button>
-
-          <button
-            type="button"
-            id="tab-sheets"
-            onClick={() => setActiveTab('sheets')}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
-              activeTab === 'sheets'
-                ? 'bg-emerald-700 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span>Google Sheets & Sync</span>
-            <span className={`px-1.5 py-0.2 rounded text-[10px] font-extrabold uppercase ${
-              activeTab === 'sheets' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
-            }`}>
-              All 7 Tabs
-            </span>
-          </button>
         </div>
 
-        {/* TAB 1: SERVICES MANAGEMENT */}
+        {/* TAB 1: SERVICES MANAGEMENT (WITH PICTURES & ADD/EDIT SERVICE) */}
         {activeTab === 'services' && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-5">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
             {serviceSuccessToast && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold flex items-center justify-between">
+              <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>{serviceSuccessToast}</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setServiceSuccessToast(null)}
-                  className="text-emerald-700 hover:text-emerald-900 font-bold text-sm"
-                >
-                  ✕
-                </button>
+                <button type="button" onClick={() => setServiceSuccessToast(null)} className="text-emerald-700 font-bold">✕</button>
               </div>
             )}
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">
-                  Service Management (Dynamic Addition & Instant Publishing)
+                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <span>Services Catalog & Photos</span>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                    {totalServices} Total Services
+                  </span>
                 </h2>
-                <p className="text-xs text-slate-500">
-                  Services added or modified here immediately update on the public website without needing code redeployment.
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Services are hardcoded directly in the codebase (<code className="text-blue-700">src/data/hardcodedServices.ts</code>) — not in browser cache or sheets. Add new services here to generate code.
                 </p>
               </div>
 
-              <button
-                type="button"
-                id="btn-admin-add-service"
-                onClick={handleOpenAddService}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold rounded-xl shadow-xs transition-colors shrink-0"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add New Service</span>
-              </button>
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  id="btn-add-service-open"
+                  onClick={openAddServiceModal}
+                  className="px-4 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Add Service &amp; Generate Code</span>
+                </button>
+              </div>
             </div>
 
-            {/* Search Input for services */}
-            <div className="relative max-w-sm">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            {/* Instant Filter Search */}
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
               <input
                 type="text"
+                placeholder="Search services by name or category..."
                 value={serviceSearchTerm}
                 onChange={(e) => setServiceSearchTerm(e.target.value)}
-                placeholder="Search services in dashboard..."
-                className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:bg-white focus:border-blue-500"
               />
             </div>
 
-            {/* Services Table */}
-            <div className="overflow-x-auto border border-slate-200 rounded-xl">
+            {/* Services Table with Pictures */}
+            <div className="overflow-x-auto border border-slate-200 rounded-2xl">
               <table className="w-full text-left text-xs text-slate-700">
                 <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[11px]">
                   <tr>
-                    <th className="p-3.5">Service Details</th>
+                    <th className="p-3.5">Picture & Service Name</th>
                     <th className="p-3.5">Category</th>
-                    <th className="p-3.5">Docs Required</th>
+                    <th className="p-3.5">Est. Time</th>
+                    <th className="p-3.5">Popular</th>
                     <th className="p-3.5">Status</th>
                     <th className="p-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredServices.map((service) => (
-                    <tr key={service.service_id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-3.5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center shrink-0">
-                            {getServiceIcon(service.icon, { className: "w-4 h-4" })}
-                          </div>
-                          <div>
-                            <div className="font-bold text-slate-900">
-                              {service.service_name_en}
+                  {filteredServices.length > 0 ? (
+                    filteredServices.map((service) => (
+                      <tr key={service.service_id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="p-3.5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-14 h-10 rounded-lg overflow-hidden bg-slate-200 shrink-0 border border-slate-300">
+                              <img
+                                src={service.image_url || 'https://images.unsplash.com/photo-1450133064473-71024230f91b?auto=format&fit=crop&w=600&q=80'}
+                                alt={service.service_name_en}
+                                className="w-full h-full object-cover"
+                                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                              />
                             </div>
-                            <div className="text-[11px] text-slate-500 font-medium">
-                              {service.service_name_hi}
+                            <div>
+                              <div className="font-bold text-slate-900 text-sm">
+                                {service.service_name_en}
+                              </div>
+                              <div className="text-[11px] text-slate-500 font-medium">
+                                {service.service_name_hi}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="p-3.5">
-                        <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-semibold text-[11px] border border-slate-200">
-                          {service.category}
-                        </span>
-                      </td>
-                      <td className="p-3.5">
-                        <span className="text-slate-600">
-                          {service.required_documents ? service.required_documents.length : 0} items
-                        </span>
-                      </td>
-                      <td className="p-3.5">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleServiceStatus(service)}
-                          title="Click to toggle Active/Disabled"
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-colors ${
-                            service.status === 'Active'
-                              ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                              : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-                          }`}
-                        >
-                          {service.status === 'Active' ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                          <span>{service.status}</span>
-                        </button>
-                      </td>
-                      <td className="p-3.5 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                        </td>
+                        <td className="p-3.5">
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                            {service.category}
+                          </span>
+                        </td>
+                        <td className="p-3.5 text-slate-600 font-medium">
+                          {service.estimated_time || '1 to 3 Days'}
+                        </td>
+                        <td className="p-3.5">
+                          {service.popular ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                              ★ Popular
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="p-3.5">
                           <button
                             type="button"
-                            onClick={() => handleOpenEditService(service)}
-                            className="p-1.5 text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
-                            title="Edit Service"
+                            onClick={() => handleToggleServiceStatus(service)}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold cursor-pointer transition-colors ${
+                              service.status === 'Active'
+                                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+                                : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'
+                            }`}
                           >
-                            <Edit className="w-4 h-4" />
+                            {service.status === 'Active' ? '● Active' : '○ Disabled'}
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setServiceToDelete(service)}
-                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
-                            title="Delete Service"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                        </td>
+                        <td className="p-3.5 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditService(service)}
+                              className="p-1.5 text-blue-700 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                              title="Edit Service"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setServiceToDelete(service)}
+                              className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="Delete Service"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="text-center py-8 text-slate-500">
+                        No services matching "{serviceSearchTerm}".
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         )}
 
-        {/* TAB 2: CITIZEN ENQUIRIES MANAGEMENT */}
+        {/* TAB 2: CITIZEN ENQUIRIES & APPLICATIONS */}
         {activeTab === 'enquiries' && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">
-                  Citizen Enquiries & Assistance Requests
+                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <span>Citizen Enquiries & Online Applications</span>
+                  <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
+                    {enquiries.length} Enquiries
+                  </span>
                 </h2>
-                <p className="text-xs text-slate-500">
-                  Direct citizen contact desk. Call or WhatsApp citizens directly from this view.
+                <p className="text-xs text-slate-500 mt-0.5">
+                  User enquiries received from the website. Also automatically stored in your single Google Sheet ("Enquiries").
                 </p>
               </div>
 
-              {/* Status Filter & Actions */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-slate-500 font-bold">Filter Status:</span>
+              <div className="flex items-center gap-2.5 flex-wrap">
                 <select
                   value={enquiryFilterStatus}
                   onChange={(e) => setEnquiryFilterStatus(e.target.value)}
-                  className="px-2.5 py-1 text-xs bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:outline-none"
+                  className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none"
                 >
-                  <option value="All">All Statuses ({totalEnquiries})</option>
-                  <option value="New">New</option>
-                  <option value="Contacted">Contacted</option>
-                  <option value="Processing">Processing</option>
-                  <option value="Completed">Completed</option>
-                  <option value="Cancelled">Cancelled</option>
+                  <option value="All">All Statuses ({enquiries.length})</option>
+                  <option value="New">New ({enquiries.filter(e => e.status === 'New').length})</option>
+                  <option value="Processing">Processing ({enquiries.filter(e => e.status === 'Processing').length})</option>
+                  <option value="Completed">Completed ({enquiries.filter(e => e.status === 'Completed').length})</option>
+                  <option value="Cancelled">Cancelled ({enquiries.filter(e => e.status === 'Cancelled').length})</option>
                 </select>
 
                 {enquiries.length > 0 && (
                   <button
                     type="button"
                     onClick={() => setIsClearEnquiriesModalOpen(true)}
-                    className="px-2.5 py-1 text-xs bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                    title="Remove all enquiries to keep table clean"
+                    className="px-3 py-2 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-colors cursor-pointer"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Clear Enquiries</span>
+                    Clear All
                   </button>
                 )}
               </div>
             </div>
 
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+              <input
+                type="text"
+                placeholder="Search enquiries by Reference ID, citizen name, phone number, or service..."
+                value={enquirySearchTerm}
+                onChange={(e) => setEnquirySearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:bg-white focus:border-blue-500"
+              />
+            </div>
+
             {/* Enquiries Table */}
-            <div className="overflow-x-auto border border-slate-200 rounded-xl">
+            <div className="overflow-x-auto border border-slate-200 rounded-2xl">
               <table className="w-full text-left text-xs text-slate-700">
                 <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[11px]">
                   <tr>
-                    <th className="p-3.5">Applicant & Ref ID</th>
-                    <th className="p-3.5">Mobile & Address</th>
-                    <th className="p-3.5">Service & Priority</th>
-                    <th className="p-3.5">Date & Pref</th>
+                    <th className="p-3.5">Ref ID & Citizen Name</th>
+                    <th className="p-3.5">Mobile & Contact</th>
+                    <th className="p-3.5">Service Requested</th>
+                    <th className="p-3.5">Date & Time</th>
                     <th className="p-3.5">Status</th>
                     <th className="p-3.5 text-right">Actions</th>
                   </tr>
@@ -815,120 +707,95 @@ export const AdminDashboard: React.FC = () => {
                 <tbody className="divide-y divide-slate-100">
                   {filteredEnquiries.length > 0 ? (
                     filteredEnquiries.map((enq) => {
-                      const cleanMob = (enq.mobile || '').replace(/\D/g, '');
+                      const cleanPhone = (enq.mobile || '').replace(/\D/g, '').slice(-10);
                       return (
                         <tr key={enq.enquiry_id} className="hover:bg-slate-50/80 transition-colors">
                           <td className="p-3.5">
-                            <button
-                              type="button"
-                              onClick={() => setSelectedEnquiryForDetails(enq)}
-                              className="text-left group cursor-pointer"
-                              title="Click to view full citizen details and update status"
-                            >
-                              <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 block w-fit mb-1 group-hover:bg-blue-100 transition-colors">
-                                {enq.enquiry_id}
-                              </span>
-                              <div className="font-bold text-slate-900 text-xs sm:text-sm group-hover:text-blue-700 transition-colors">
-                                {enq.customer_name}
-                              </div>
-                            </button>
-                            {enq.father_or_husband_name && (
+                            <span className="font-mono text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 block w-fit mb-1 font-bold">
+                              {enq.enquiry_id}
+                            </span>
+                            <div className="font-bold text-slate-900 text-sm">
+                              {enq.customer_name || enq.applicant_name}
+                            </div>
+                            {enq.village && (
                               <div className="text-[11px] text-slate-500">
-                                S/O, W/O: {enq.father_or_husband_name}
+                                Village: {enq.village}
                               </div>
-                            )}
-                            {enq.message && (
-                              <p className="text-[11px] font-normal text-slate-500 mt-1 max-w-xs line-clamp-1 italic">
-                                "{enq.message}"
-                              </p>
                             )}
                           </td>
+
                           <td className="p-3.5">
+                            <div className="font-mono text-slate-900 font-bold mb-1">
+                              {enq.mobile}
+                            </div>
                             <div className="flex items-center gap-2">
-                              <span className="font-mono text-slate-800 font-semibold">{enq.mobile}</span>
-                              {/* Quick Call */}
                               <a
-                                href={`tel:${cleanMob}`}
-                                title="Call Citizen"
-                                className="p-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded"
+                                href={`tel:${cleanPhone}`}
+                                className="px-2 py-0.5 text-[10px] font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 rounded border border-blue-200 flex items-center gap-1"
                               >
                                 <Phone className="w-3 h-3" />
+                                <span>Call</span>
                               </a>
-                              {/* Quick WhatsApp */}
                               <a
-                                href={`https://wa.me/91${cleanMob}?text=${encodeURIComponent(`Hello ${enq.customer_name}, this is Balaji Communication regarding your application ${enq.enquiry_id} for ${enq.service_name}. Status: ${enq.status}.`)}`}
+                                href={`https://wa.me/91${cleanPhone}?text=${encodeURIComponent(`Hello ${enq.customer_name}, regarding your application for ${enq.service_name} at Balaji Communication Jan Seva Kendra:`)}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                title="WhatsApp Citizen"
-                                className="p-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded"
+                                className="px-2 py-0.5 text-[10px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded border border-emerald-200 flex items-center gap-1"
                               >
-                                <MessageCircle className="w-3 h-3 fill-emerald-600" />
+                                <MessageCircle className="w-3 h-3 fill-emerald-600 text-white" />
+                                <span>WhatsApp</span>
                               </a>
                             </div>
-                            {enq.address && (
-                              <div className="text-[11px] text-slate-600 mt-1 truncate max-w-xs">
-                                📍 {enq.address}
-                              </div>
-                            )}
                           </td>
+
                           <td className="p-3.5">
                             <div className="font-semibold text-slate-900">
                               {enq.service_name}
                             </div>
-                            {enq.urgency && enq.urgency !== 'Normal' && (
-                              <span className="inline-block mt-1 px-1.5 py-0.5 text-[10px] font-extrabold bg-rose-100 text-rose-800 rounded">
-                                {enq.urgency}
-                              </span>
-                            )}
-                          </td>
-                          <td className="p-3.5 text-slate-500">
-                            <div>{enq.created_at ? new Date(enq.created_at).toLocaleDateString() : 'Recent'}</div>
-                            <span className="text-[10px] text-blue-700 font-semibold">
-                              Pref: {enq.preferred_contact}
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 inline-block mt-0.5">
+                              {enq.category || 'General'}
                             </span>
                           </td>
+
+                          <td className="p-3.5 text-slate-500 text-[11px]">
+                            {enq.created_at ? new Date(enq.created_at).toLocaleString() : '—'}
+                          </td>
+
                           <td className="p-3.5">
                             <select
-                              value={enq.status}
-                              onChange={async (e) => {
-                                const newStatus = e.target.value as any;
-                                await updateEnquiryStatus(enq.enquiry_id, newStatus);
-                                setServiceSuccessToast(`Status updated to "${newStatus}" for ${enq.customer_name || enq.applicant_name}`);
-                                setTimeout(() => setServiceSuccessToast(null), 3500);
-                              }}
-                              className={`text-[11px] font-bold rounded-lg px-2.5 py-1.5 border cursor-pointer transition-colors shadow-2xs ${
+                              value={enq.status || 'New'}
+                              onChange={(e) => updateEnquiryStatus(enq.enquiry_id, e.target.value as EnquiryStatus)}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold border focus:outline-none ${
                                 enq.status === 'New'
-                                  ? 'bg-blue-50 text-blue-800 border-blue-300 font-extrabold'
+                                  ? 'bg-blue-50 text-blue-800 border-blue-300'
                                   : enq.status === 'Completed'
-                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 font-extrabold'
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
                                   : enq.status === 'Processing'
-                                  ? 'bg-indigo-50 text-indigo-800 border-indigo-300 font-extrabold'
-                                  : enq.status === 'Contacted'
-                                  ? 'bg-amber-50 text-amber-800 border-amber-300 font-extrabold'
-                                  : 'bg-rose-50 text-rose-800 border-rose-300 font-extrabold'
+                                  ? 'bg-indigo-50 text-indigo-800 border-indigo-300'
+                                  : 'bg-rose-50 text-rose-800 border-rose-300'
                               }`}
                             >
                               <option value="New">New (आवेदन प्राप्त)</option>
-                              <option value="Contacted">Contacted (दस्तावेज जांच)</option>
                               <option value="Processing">Processing (प्रक्रियाधीन)</option>
                               <option value="Completed">Completed (कार्य पूर्ण)</option>
                               <option value="Cancelled">Cancelled (निरस्त)</option>
                             </select>
                           </td>
+
                           <td className="p-3.5 text-right">
                             <div className="flex items-center justify-end gap-1.5">
                               <button
                                 type="button"
                                 onClick={() => setSelectedEnquiryForDetails(enq)}
-                                className="p-1.5 text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
-                                title="View Full Details & Update Status"
+                                className="p-1.5 text-blue-700 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                                title="View Details"
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setEnquiryToDelete(enq)}
-                                className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
+                                className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                                 title="Delete Enquiry"
                               >
                                 <Trash2 className="w-4 h-4" />
@@ -940,8 +807,8 @@ export const AdminDashboard: React.FC = () => {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={6} className="text-center py-8 text-slate-500">
-                        No enquiries found for this filter.
+                      <td colSpan={6} className="text-center py-10 text-slate-500">
+                        No enquiries found. All user submissions will appear here.
                       </td>
                     </tr>
                   )}
@@ -951,623 +818,225 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 3: PRICE LIST & FEE SCHEDULE */}
-        {activeTab === 'pricelist' && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase rounded-md bg-blue-100 text-blue-800">
-                    Live Sheet: PriceList
-                  </span>
-                  <span className="text-xs text-slate-500 font-medium">
-                    {priceList?.length || 0} Listed Services
-                  </span>
-                </div>
-                <h2 className="text-lg font-bold text-slate-900">
-                  Rate List & Government Fee Schedule
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Full fee transparency for citizens. Synced directly from your master Google Sheet (Tab: "PriceList").
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('sheets')}
-                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Sync from Google Sheet</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Filter & Search Bar */}
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  placeholder="Search by service name, category, or notes..."
-                  value={priceSearchTerm}
-                  onChange={(e) => setPriceSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-600"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-500 font-bold shrink-0">Category:</span>
-                <select
-                  value={priceCategoryFilter}
-                  onChange={(e) => setPriceCategoryFilter(e.target.value)}
-                  className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none"
-                >
-                  <option value="All">All Categories</option>
-                  {Array.from(new Set((priceList || []).map(p => p.category).filter(Boolean))).map((cat) => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Rates Table */}
-            <div className="overflow-x-auto border border-slate-200 rounded-xl">
-              <table className="w-full text-left text-xs text-slate-700">
-                <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[11px]">
-                  <tr>
-                    <th className="p-3.5">Rate ID & Service Name</th>
-                    <th className="p-3.5">Category</th>
-                    <th className="p-3.5">Govt Fee</th>
-                    <th className="p-3.5">Center Fee</th>
-                    <th className="p-3.5">Total Fee</th>
-                    <th className="p-3.5">Delivery Time</th>
-                    <th className="p-3.5">Notes / Citizen Guidelines</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {(() => {
-                    const filtered = (priceList || []).filter(item => {
-                      const matchesSearch = !priceSearchTerm ||
-                        item.service_name.toLowerCase().includes(priceSearchTerm.toLowerCase()) ||
-                        item.category.toLowerCase().includes(priceSearchTerm.toLowerCase()) ||
-                        (item.notes && item.notes.toLowerCase().includes(priceSearchTerm.toLowerCase()));
-                      const matchesCat = priceCategoryFilter === 'All' || item.category === priceCategoryFilter;
-                      return matchesSearch && matchesCat;
-                    });
-
-                    if (filtered.length === 0) {
-                      return (
-                        <tr>
-                          <td colSpan={7} className="text-center py-10 text-slate-500">
-                            <Tag className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                            <p className="font-semibold">No price list entries found.</p>
-                            <p className="text-[11px] text-slate-400 mt-1">
-                              Entries are synchronized from your Google Sheet "PriceList" tab.
-                            </p>
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    return filtered.map((item) => (
-                      <tr key={item.price_id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="p-3.5 font-bold text-slate-900">
-                          <span className="font-mono text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 block w-fit mb-1">
-                            {item.price_id}
-                          </span>
-                          <div>{item.service_name}</div>
-                        </td>
-                        <td className="p-3.5">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                            {item.category}
-                          </span>
-                        </td>
-                        <td className="p-3.5 font-semibold text-slate-700">
-                          {item.government_fee}
-                        </td>
-                        <td className="p-3.5 font-semibold text-slate-700">
-                          {item.center_fee}
-                        </td>
-                        <td className="p-3.5">
-                          <span className="px-2.5 py-1 rounded-md text-xs font-black bg-emerald-50 text-emerald-800 border border-emerald-300">
-                            {item.total_fee}
-                          </span>
-                        </td>
-                        <td className="p-3.5 text-slate-600 font-medium">
-                          <div className="flex items-center gap-1.5">
-                            <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            <span>{item.estimated_delivery}</span>
-                          </div>
-                        </td>
-                        <td className="p-3.5 text-[11px] text-slate-500 max-w-xs">
-                          {item.notes || '—'}
-                        </td>
-                      </tr>
-                    ));
-                  })()}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 4: NOTICE BOARD */}
-        {activeTab === 'notices' && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase rounded-md bg-amber-100 text-amber-800">
-                    Live Sheet: NoticeBoard
-                  </span>
-                  <span className="text-xs text-slate-500 font-medium">
-                    {notices?.length || 0} Official Notices
-                  </span>
-                </div>
-                <h2 className="text-lg font-bold text-slate-900">
-                  Center Notice Board & Urgent Updates
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Citizen announcements, last dates, server maintenance, and government scheme deadlines from your Google Sheet.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('sheets')}
-                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Sync from Google Sheet</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Notices List */}
-            <div className="space-y-4">
-              {(!notices || notices.length === 0) ? (
-                <div className="text-center py-12 border border-dashed border-slate-200 rounded-xl">
-                  <Bell className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                  <p className="text-xs font-semibold text-slate-600">No notices currently published.</p>
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Add notice rows to your master Google Sheet "NoticeBoard" tab and click Sync.
+        {/* TAB 3: GOOGLE SHEETS ENQUIRY STORE (SINGLE SHEET ONLY) */}
+        {activeTab === 'sheets' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold uppercase tracking-wider mb-2">
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Single-Sheet Citizen Enquiry Database</span>
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-black text-slate-900">
+                    Google Sheet Setup for User Enquiries
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
+                    Google Sheets is used exclusively to store incoming citizen enquiries and online applications in a single sheet named <strong>"Enquiries"</strong>. No other data is fetched from Google Sheets.
                   </p>
                 </div>
-              ) : (
-                notices.map((notice) => (
-                  <div
-                    key={notice.notice_id}
-                    className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-colors space-y-2.5"
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <a
+                    href="https://sheets.new"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors cursor-pointer shadow-2xs"
                   >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                          {notice.notice_id}
-                        </span>
-                        <span className={`px-2 py-0.5 text-[10px] font-extrabold uppercase rounded ${
-                          notice.priority === 'Urgent'
-                            ? 'bg-rose-100 text-rose-800'
-                            : notice.priority === 'High'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-blue-100 text-blue-800'
-                        }`}>
-                          {notice.priority} Priority
-                        </span>
-                        <span className="px-2 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-600 rounded">
-                          {notice.category}
-                        </span>
-                      </div>
-                      <span className="text-xs font-semibold text-slate-500">
-                        🗓️ {notice.date}
-                      </span>
-                    </div>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Open sheets.new</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={handleCopyScriptCode}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors cursor-pointer shadow-2xs"
+                  >
+                    {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedCode ? 'Code Copied!' : 'Copy Apps Script Code'}</span>
+                  </button>
+                </div>
+              </div>
 
-                    <h3 className="text-sm font-bold text-slate-900">
-                      {notice.title}
-                    </h3>
+              {/* Quick 3-Step Setup Instructions */}
+              <div className="bg-slate-50 rounded-2xl p-4 sm:p-5 border border-slate-200 space-y-2.5 text-xs text-slate-700">
+                <span className="font-extrabold text-slate-900 block text-xs uppercase tracking-wider text-blue-700">
+                  Quick 2-Minute Google Sheet Setup:
+                </span>
+                <ol className="list-decimal pl-4 space-y-1.5 text-slate-600 font-medium">
+                  <li>Open your Google Sheet at <a href="https://sheets.new" target="_blank" rel="noopener noreferrer" className="text-blue-600 font-bold underline">sheets.new</a>. In menu, click <strong>Extensions &gt; Apps Script</strong>.</li>
+                  <li>Click <strong>Copy Apps Script Code</strong> above, paste it into <code>Code.gs</code>, and click Save (💾).</li>
+                  <li>In Apps Script toolbar dropdown, select <strong>setupEnquiriesSheet</strong> and click <strong>Run (▶)</strong> to authorize permissions and create the "Enquiries" sheet.</li>
+                  <li>Click <strong>Deploy &gt; New deployment</strong>, select <strong>Web app</strong>, set <strong>Who has access: "Anyone"</strong>, click Deploy, and copy the Web App URL (ends with <code>/exec</code>).</li>
+                  <li>Paste the Web App URL below and click <strong>Save &amp; Connect Google Sheet</strong>!</li>
+                </ol>
+              </div>
 
-                    <p className="text-xs text-slate-600 leading-relaxed">
-                      {notice.description}
-                    </p>
-
-                    {notice.action_url && (
-                      <div className="pt-1">
-                        <a
-                          href={notice.action_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-700 hover:text-blue-900 underline"
-                        >
-                          <span>Official Portal / Circular Link</span>
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      </div>
+              {/* URL Input & Connect Action */}
+              <div className="space-y-3 pt-2">
+                <label className="block text-xs font-bold text-slate-800">
+                  Google Apps Script Web App URL (/exec)
+                </label>
+                <div className="flex flex-col sm:flex-row gap-2.5">
+                  <input
+                    type="url"
+                    value={sheetsUrlInput}
+                    onChange={(e) => setSheetsUrlInput(e.target.value)}
+                    placeholder="https://script.google.com/macros/s/.../exec"
+                    className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleConnectSheet}
+                    disabled={isConnectingSheet}
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs shrink-0 disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    {isConnectingSheet ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Connecting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-4 h-4" />
+                        <span>Save &amp; Connect</span>
+                      </>
                     )}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* TAB 5: QUICK LINKS & GOVT PORTALS */}
-        {activeTab === 'quicklinks' && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase rounded-md bg-emerald-100 text-emerald-800">
-                    Live Sheet: QuickLinks
-                  </span>
-                  <span className="text-xs text-slate-500 font-medium">
-                    {quickLinks?.length || 0} Portals Configured
-                  </span>
-                </div>
-                <h2 className="text-lg font-bold text-slate-900">
-                  Government Portals & Official Bookmarks
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Instant launchpad for official Jan Seva Kendra operations from your Google Sheet (Tab: "QuickLinks").
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('sheets')}
-                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Sync from Google Sheet</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Search */}
-            <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                placeholder="Search portals by title, portal name, or category..."
-                value={quickLinkSearchTerm}
-                onChange={(e) => setQuickLinkSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-600"
-              />
-            </div>
-
-            {/* Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {(() => {
-                const filtered = (quickLinks || []).filter(item =>
-                  !quickLinkSearchTerm ||
-                  item.title.toLowerCase().includes(quickLinkSearchTerm.toLowerCase()) ||
-                  item.portal_name.toLowerCase().includes(quickLinkSearchTerm.toLowerCase()) ||
-                  item.category.toLowerCase().includes(quickLinkSearchTerm.toLowerCase())
-                );
-
-                if (filtered.length === 0) {
-                  return (
-                    <div className="col-span-full text-center py-12 border border-dashed border-slate-200 rounded-xl">
-                      <Globe className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                      <p className="text-xs font-semibold text-slate-600">No portal links found.</p>
-                      <p className="text-[11px] text-slate-400 mt-1">
-                        Add rows to the "QuickLinks" tab in your master Google Sheet and sync.
-                      </p>
-                    </div>
-                  );
-                }
-
-                return filtered.map((link) => (
-                  <div
-                    key={link.link_id}
-                    className="p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-xs transition-all space-y-3 flex flex-col justify-between"
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSendTestEnquiry}
+                    disabled={isTestingDispatch}
+                    className="px-4 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs shrink-0 disabled:opacity-60 flex items-center justify-center gap-1.5"
                   >
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-blue-50 text-blue-700 border border-blue-200">
-                          {link.category}
-                        </span>
-                        <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-600">
-                          {link.login_type}
-                        </span>
-                      </div>
-
-                      <h4 className="text-sm font-bold text-slate-900">
-                        {link.title}
-                      </h4>
-
-                      <div className="text-xs font-semibold text-slate-600">
-                        🏛️ {link.portal_name}
-                      </div>
-
-                      <p className="text-[11px] text-slate-500 line-clamp-2">
-                        {link.description}
-                      </p>
-
-                      {link.required_credentials && (
-                        <div className="p-2 rounded bg-amber-50/70 border border-amber-200/70 text-[10px] text-amber-900">
-                          <strong>Required:</strong> {link.required_credentials}
-                        </div>
-                      )}
-                    </div>
-
-                    <a
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-1.5 w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-colors"
-                    >
-                      <span>Open Official Portal</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  </div>
-                ));
-              })()}
-            </div>
-          </div>
-        )}
-
-        {/* TAB 6: CITIZENS REGISTRY */}
-        {activeTab === 'citizens' && (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase rounded-md bg-purple-100 text-purple-800">
-                    Live Sheet: Citizens
-                  </span>
-                  <span className="text-xs text-slate-500 font-medium">
-                    {citizens?.length || 0} Registered Citizens
-                  </span>
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Send Test Enquiry</span>
+                  </button>
                 </div>
-                <h2 className="text-lg font-bold text-slate-900">
-                  Citizens & Beneficiaries Registry
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Local village customer database from your master Google Sheet (Tab: "Citizens").
-                </p>
+
+                {sheetStatusMsg && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{sheetStatusMsg}</span>
+                  </div>
+                )}
+
+                {testDispatchSuccess && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl text-xs font-semibold flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
+                    <span>{testDispatchSuccess}</span>
+                  </div>
+                )}
               </div>
-
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('sheets')}
-                  className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Sync from Google Sheet</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Search Bar */}
-            <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                placeholder="Search citizen by name, father name, mobile, or village..."
-                value={citizenSearchTerm}
-                onChange={(e) => setCitizenSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-600"
-              />
-            </div>
-
-            {/* Citizens Table */}
-            <div className="overflow-x-auto border border-slate-200 rounded-xl">
-              <table className="w-full text-left text-xs text-slate-700">
-                <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 uppercase tracking-wider text-[11px]">
-                  <tr>
-                    <th className="p-3.5">Citizen ID & Name</th>
-                    <th className="p-3.5">Father / Husband</th>
-                    <th className="p-3.5">Mobile</th>
-                    <th className="p-3.5">Village / Ward</th>
-                    <th className="p-3.5">Aadhaar (Last 4)</th>
-                    <th className="p-3.5">Registered Date</th>
-                    <th className="p-3.5">Notes</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {(() => {
-                    const filtered = (citizens || []).filter(item =>
-                      !citizenSearchTerm ||
-                      item.full_name.toLowerCase().includes(citizenSearchTerm.toLowerCase()) ||
-                      (item.father_name && item.father_name.toLowerCase().includes(citizenSearchTerm.toLowerCase())) ||
-                      (item.mobile && item.mobile.includes(citizenSearchTerm)) ||
-                      (item.village && item.village.toLowerCase().includes(citizenSearchTerm.toLowerCase()))
-                    );
-
-                    if (filtered.length === 0) {
-                      return (
-                        <tr>
-                          <td colSpan={7} className="text-center py-10 text-slate-500">
-                            <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                            <p className="font-semibold">No citizen records found.</p>
-                            <p className="text-[11px] text-slate-400 mt-1">
-                              When citizens register or you add them in the "Citizens" sheet tab, they will appear here.
-                            </p>
-                          </td>
-                        </tr>
-                      );
-                    }
-
-                    return filtered.map((c) => {
-                      const cleanMob = (c.mobile || '').replace(/\D/g, '');
-                      return (
-                        <tr key={c.citizen_id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="p-3.5 font-bold text-slate-900">
-                            <span className="font-mono text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 block w-fit mb-1">
-                              {c.citizen_id}
-                            </span>
-                            <div>{c.full_name}</div>
-                          </td>
-                          <td className="p-3.5 text-slate-600">
-                            {c.father_name || '—'}
-                          </td>
-                          <td className="p-3.5">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-semibold text-slate-800">{c.mobile}</span>
-                              {cleanMob && (
-                                <>
-                                  <a
-                                    href={`tel:${cleanMob}`}
-                                    className="p-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded"
-                                    title="Call Citizen"
-                                  >
-                                    <Phone className="w-3 h-3" />
-                                  </a>
-                                  <a
-                                    href={`https://wa.me/91${cleanMob}?text=${encodeURIComponent(`Hello ${c.full_name}, this is Balaji Communication Jan Seva Kendra.`)}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="p-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded"
-                                    title="WhatsApp Citizen"
-                                  >
-                                    <MessageCircle className="w-3 h-3 fill-emerald-600" />
-                                  </a>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                          <td className="p-3.5 text-slate-600 font-medium">
-                            {c.village || '—'}
-                          </td>
-                          <td className="p-3.5 font-mono text-slate-700">
-                            {c.aadhaar_last4 ? `XXXX-XXXX-${c.aadhaar_last4}` : '—'}
-                          </td>
-                          <td className="p-3.5 text-slate-500">
-                            {c.created_at ? new Date(c.created_at).toLocaleDateString() : '—'}
-                          </td>
-                          <td className="p-3.5 text-[11px] text-slate-500 max-w-xs">
-                            {c.notes || '—'}
-                          </td>
-                        </tr>
-                      );
-                    });
-                  })()}
-                </tbody>
-              </table>
             </div>
           </div>
         )}
+
+        {/* TAB 4: CENTER SETTINGS */}
         {activeTab === 'settings' && (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">
-                  Website & Business Settings
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Configure Center Name, phone numbers, address, working hours, and homepage copy.
-                </p>
-              </div>
-
-              {settingsSavedMsg && (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold animate-in fade-in">
-                  <Check className="w-4 h-4" />
-                  <span>Settings successfully saved!</span>
-                </div>
-              )}
+            <div className="border-b border-slate-100 pb-4">
+              <h2 className="text-lg font-bold text-slate-900">
+                Center Information & Contact Details
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Update Jan Seva Kendra name, phone numbers, WhatsApp helpline, and shop address.
+              </p>
             </div>
 
-            <form onSubmit={handleSaveSettings} className="space-y-6">
-              {/* Center Names */}
+            {settingsSavedMsg && (
+              <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Settings saved successfully!</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveSettings} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Business Name (English)
+                    Center Name (English)
                   </label>
                   <input
                     type="text"
-                    required
-                    value={settingsForm.business_name_en}
+                    value={settingsForm.business_name_en || ''}
                     onChange={(e) => setSettingsForm({ ...settingsForm, business_name_en: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Business Name (Hindi)
+                    Center Name (Hindi)
                   </label>
                   <input
                     type="text"
-                    required
-                    value={settingsForm.business_name_hi}
+                    value={settingsForm.business_name_hi || ''}
                     onChange={(e) => setSettingsForm({ ...settingsForm, business_name_hi: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
                   />
                 </div>
               </div>
 
-              {/* Contacts */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Calling Phone Number
+                    Helpline Phone Number
                   </label>
                   <input
                     type="text"
-                    required
-                    value={settingsForm.phone_number}
+                    value={settingsForm.phone_number || ''}
                     onChange={(e) => setSettingsForm({ ...settingsForm, phone_number: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    WhatsApp Number (with country code, e.g. 919870677605)
+                    WhatsApp Number
                   </label>
                   <input
                     type="text"
-                    required
-                    value={settingsForm.whatsapp_number}
+                    value={settingsForm.whatsapp_number || ''}
                     onChange={(e) => setSettingsForm({ ...settingsForm, whatsapp_number: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Email ID
+                    Email Address
                   </label>
                   <input
                     type="email"
-                    required
-                    value={settingsForm.email}
+                    value={settingsForm.email || ''}
                     onChange={(e) => setSettingsForm({ ...settingsForm, email: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
                   />
                 </div>
               </div>
 
-              {/* Address */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Physical Address (English)
+                    Address (English)
                   </label>
                   <textarea
                     rows={2}
-                    value={settingsForm.address_en}
+                    value={settingsForm.address_en || ''}
                     onChange={(e) => setSettingsForm({ ...settingsForm, address_en: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Physical Address (Hindi)
+                    Address (Hindi)
                   </label>
                   <textarea
                     rows={2}
-                    value={settingsForm.address_hi}
+                    value={settingsForm.address_hi || ''}
                     onChange={(e) => setSettingsForm({ ...settingsForm, address_hi: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
                   />
                 </div>
               </div>
 
-              {/* Hours & Map Link */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -1575,82 +1044,28 @@ export const AdminDashboard: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    value={settingsForm.opening_hours_en}
+                    value={settingsForm.opening_hours_en || ''}
                     onChange={(e) => setSettingsForm({ ...settingsForm, opening_hours_en: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Google Maps Directions URL
-                  </label>
-                  <input
-                    type="url"
-                    value={settingsForm.google_maps_url}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, google_maps_url: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900"
-                  />
-                </div>
-              </div>
-
-              {/* Hero Texts */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Hero Headline (Hindi)
+                    Opening Hours (Hindi)
                   </label>
                   <input
                     type="text"
-                    value={settingsForm.hero_headline_hi}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, hero_headline_hi: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Hero Headline (English)
-                  </label>
-                  <input
-                    type="text"
-                    value={settingsForm.hero_headline_en}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, hero_headline_en: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900"
-                  />
-                </div>
-              </div>
-
-              {/* About Us Description */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    About Us (English)
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={settingsForm.about_us_en}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, about_us_en: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    About Us (Hindi)
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={settingsForm.about_us_hi}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, about_us_hi: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-900"
+                    value={settingsForm.opening_hours_hi || ''}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, opening_hours_hi: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
                   />
                 </div>
               </div>
 
               <div className="pt-2">
                 <button
-                  type="button"
-                  id="btn-save-settings"
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleSaveSettings(e); }}
-                  className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+                  type="submit"
+                  className="px-6 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
                 >
                   <Save className="w-4 h-4" />
                   <span>Save Center Settings</span>
@@ -1660,556 +1075,21 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 4: GOOGLE SHEETS & ALL IMPORT TEMPLATES HUB */}
-        {activeTab === 'sheets' && (
-          <div className="space-y-6">
-            
-            {/* Header Banner */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div>
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold uppercase tracking-wider mb-2">
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Google Sheets & CSV Template Center</span>
-                  </div>
-                  <h2 className="text-xl sm:text-2xl font-black text-slate-900">
-                    Google Sheet Templates & Data Importer (सभी गूगल शीट टेम्पलेट्स)
-                  </h2>
-                  <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-3xl leading-relaxed">
-                    Download ready-to-use CSV templates formatted for Google Sheets, copy column headers for instant paste (<kbd className="px-1.5 py-0.5 bg-slate-200 text-slate-800 rounded font-mono text-[11px]">Ctrl+V</kbd>), upload CSV files directly, or link your Google Spreadsheet for automatic bidirectional syncing.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 flex-wrap">
-                  <a
-                    href="https://sheets.new"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors shadow-2xs"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Open sheets.new</span>
-                  </a>
-                  <button
-                    type="button"
-                    onClick={handleCopyScriptCode}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors shadow-2xs"
-                  >
-                    {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedCode ? 'Copied Master Code!' : 'Copy Master Code.gs'}</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Status Banner for Direct Imports */}
-              {importStatusBanner && (
-                <div className={`mt-4 p-4 rounded-xl border text-xs font-semibold flex items-center justify-between gap-3 ${
-                  importStatusBanner.type === 'success'
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                    : 'bg-rose-50 border-rose-200 text-rose-900'
-                }`}>
-                  <div className="flex items-center gap-2.5">
-                    {importStatusBanner.type === 'success' ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                    )}
-                    <span>{importStatusBanner.message}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setImportStatusBanner(null)}
-                    className="text-slate-400 hover:text-slate-700 text-sm font-bold"
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Google Spreadsheet Live Sync Bar */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                    <span>Google Spreadsheet Link or Apps Script Web App URL</span>
-                    <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-800 rounded-full">
-                      Live Sync
-                    </span>
-                  </h3>
-                  <p className="text-[11px] text-slate-500">
-                    Paste your Google Spreadsheet link (<code className="bg-slate-100 px-1 py-0.5 rounded text-slate-700">https://docs.google.com/spreadsheets/d/...</code>) or Web App link (<code className="bg-slate-100 px-1 py-0.5 rounded text-slate-700">https://script.google.com/macros/s/.../exec</code>)
-                  </p>
-                </div>
-
-                {settings.last_sheet_sync && (
-                  <div className="text-[11px] text-emerald-700 font-medium bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-200 flex items-center gap-1.5 shrink-0">
-                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Last synced: {new Date(settings.last_sheet_sync).toLocaleString()}</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-2">
-                <input
-                  type="url"
-                  placeholder="Paste Google Sheet URL (Public link) or Web App URL..."
-                  value={sheetsUrlInput}
-                  onChange={(e) => setSheetsUrlInput(e.target.value)}
-                  className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
-                />
-                <button
-                  type="button"
-                  id="btn-sync-sheets"
-                  onClick={handleSyncSheets}
-                  disabled={isSyncing}
-                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors inline-flex items-center justify-center gap-2 shrink-0 disabled:opacity-60 cursor-pointer"
-                >
-                  <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                  <span>{isSyncing ? 'Connecting & Syncing...' : 'Fetch & Sync Now'}</span>
-                </button>
-              </div>
-
-              {/* LIVE REAL-TIME MULTI-BROWSER AUTO-SYNC STATUS */}
-              <div className="p-3.5 bg-emerald-50/80 border border-emerald-200 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                <div className="flex items-center gap-2.5">
-                  <span className="relative flex h-2.5 w-2.5 shrink-0">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                  </span>
-                  <div>
-                    <span className="font-bold text-emerald-950 block sm:inline">
-                      Live Multi-Browser Auto-Sync Active
-                    </span>
-                    <span className="text-emerald-700 text-[11px] sm:ml-2">
-                      (All services, price lists & updates automatically sync every 3s to every open browser & device)
-                    </span>
-                  </div>
-                </div>
-                {lastLiveSyncTime && (
-                  <div className="text-[11px] text-emerald-800 font-medium shrink-0 bg-white/70 px-2.5 py-1 rounded-lg border border-emerald-200">
-                    Live Status: <span className="font-bold text-emerald-900">Synchronized</span> (<span className="font-mono">{lastLiveSyncTime}</span>)
-                  </div>
-                )}
-              </div>
-
-              {/* Real-time URL format validation & warnings */}
-              {sheetsUrlInput.trim().length > 0 && (
-                <div className="space-y-2">
-                  {sheetsUrlInput.includes('/edit') && (
-                    <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs flex items-start gap-2.5 shadow-2xs">
-                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                      <div className="space-y-1">
-                        <strong className="font-bold text-amber-950 block">⚠️ Apps Script Editor link (.../edit) detected:</strong>
-                        <p className="text-[11px] leading-relaxed">
-                          This is an Apps Script editor URL, which cannot be queried by web apps.
-                        </p>
-                        <p className="text-[11px] font-semibold text-amber-950 bg-amber-100/70 p-2 rounded-lg border border-amber-200">
-                          <strong>How to get the right link:</strong> In your Google Sheet, go to <strong>Extensions &gt; Apps Script</strong> &gt; click <strong>Deploy &gt; Manage deployments</strong> &gt; copy the <strong>Web App URL (ends with /exec)</strong>. Ensure "Who has access" is set to <strong>"Anyone"</strong>.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {sheetsUrlInput.includes('/dev') && (
-                    <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs flex items-start gap-2.5 shadow-2xs">
-                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                      <div className="space-y-1">
-                        <strong className="font-bold text-amber-950 block">⚠️ Draft (/dev) Link Detected:</strong>
-                        <p className="text-[11px] leading-relaxed">
-                          The <code>/dev</code> URL requires private Google login and cannot be queried by the live portal.
-                        </p>
-                        <p className="text-[11px] font-semibold text-amber-950 bg-amber-100/70 p-2 rounded-lg border border-amber-200">
-                          <strong>Fix:</strong> Click <strong>Deploy &gt; New deployment &gt; Web app</strong> &gt; Set <strong>Who has access: Anyone</strong> &gt; Copy the <strong>/exec</strong> link.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {sheetsUrlInput.includes('script.google.com') && sheetsUrlInput.includes('/exec') && (
-                    <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-900 text-xs flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span><strong>Valid Web App URL format (/exec):</strong> Ready to connect and sync with Google Apps Script backend.</span>
-                    </div>
-                  )}
-
-                  {sheetsUrlInput.includes('docs.google.com/spreadsheets') && !sheetsUrlInput.includes('/edit') && (
-                    <div className="p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl text-emerald-900 text-xs flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span><strong>Valid Google Sheet link:</strong> Make sure the sheet is shared with "Anyone with the link can view".</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Troubleshooting Quick Help Banner */}
-              <div className="p-3.5 bg-blue-50/80 border border-blue-200 rounded-xl text-xs space-y-1.5">
-                <div className="flex items-center gap-2 font-bold text-blue-950 text-xs">
-                  <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span>Important Setup Requirement to Avoid "Not Valid JSON" Error:</span>
-                </div>
-                <p className="text-[11px] text-slate-600 leading-relaxed">
-                  When you deploy Google Apps Script (<strong>Deploy &gt; New deployment &gt; Web app</strong>), you <strong>MUST</strong> select <strong className="text-blue-900 underline">Who has access: Anyone</strong>. If it is left on "Only myself", Google redirects the request to a sign-in web page (HTML) instead of returning data, which triggers the error.
-                </p>
-              </div>
-
-              {syncStatusMsg && (
-                <div className={`p-4 rounded-xl text-xs font-semibold border space-y-1.5 ${
-                  syncStatusMsg.toLowerCase().includes('success') || syncStatusMsg.toLowerCase().includes('imported') || syncStatusMsg.toLowerCase().includes('loaded')
-                    ? 'bg-emerald-50 border-emerald-300 text-emerald-900'
-                    : 'bg-rose-50 border-rose-300 text-rose-900'
-                }`}>
-                  <div className="flex items-start gap-2.5">
-                    {syncStatusMsg.toLowerCase().includes('success') || syncStatusMsg.toLowerCase().includes('imported') || syncStatusMsg.toLowerCase().includes('loaded') ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    ) : (
-                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                    )}
-                    <div className="space-y-1">
-                      <p className="font-bold">{syncStatusMsg}</p>
-                      {!syncStatusMsg.toLowerCase().includes('success') && !syncStatusMsg.toLowerCase().includes('imported') && (
-                        <p className="text-[11px] text-slate-600 font-normal mt-1 leading-relaxed">
-                          Need help? Check the step-by-step master guide below, or use <strong>Download CSV</strong> to edit and <strong>Import .CSV</strong> directly without needing Apps Script.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* GitHub Pages Live Sync Integration Card */}
-              <div className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-800 space-y-3.5 shadow-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-sm shrink-0 border border-emerald-500/30">
-                      GH
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                        <span>GitHub Pages Live Sync Integration</span>
-                        <span className="px-2 py-0.5 text-[10px] bg-emerald-500/20 text-emerald-300 font-semibold rounded-full border border-emerald-500/30">
-                          Active in Browser
-                        </span>
-                      </h4>
-                      <p className="text-[11px] text-slate-400 leading-snug">
-                        Local runs Node.js, while GitHub Pages is static. With our direct browser dispatch, submissions now forward straight into your Google Sheet on GitHub Live!
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-wrap shrink-0">
-                    <button
-                      type="button"
-                      onClick={handleDownloadConfigJson}
-                      disabled={!sheetsUrlInput.trim()}
-                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
-                      title="Download config.json to place in public/ folder"
-                    >
-                      <Download className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Download config.json</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleCopyEnvConfig}
-                      disabled={!sheetsUrlInput.trim()}
-                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
-                      title="Copy VITE_GOOGLE_SHEET_WEBAPP_URL variable"
-                    >
-                      {copiedEnv ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
-                      <span>{copiedEnv ? 'Copied .env' : 'Copy .env Variable'}</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1 text-xs">
-                  <div className="bg-slate-800/70 p-3 rounded-xl border border-slate-700/60 space-y-1">
-                    <div className="font-semibold text-emerald-400 flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Automatic Browser Dispatch (CORS-Bypass)</span>
-                    </div>
-                    <p className="text-[11px] text-slate-300 leading-relaxed">
-                      Citizen applications use <code>text/plain</code> simple POST, URL query parameters, and image beacons, ensuring delivery without preflight OPTIONS CORS blocks.
-                    </p>
-                  </div>
-                  <div className="bg-slate-800/70 p-3 rounded-xl border border-slate-700/60 space-y-1">
-                    <div className="font-semibold text-blue-400 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                      <span>How to Deploy to GitHub</span>
-                    </div>
-                    <p className="text-[11px] text-slate-300 leading-relaxed">
-                      Whenever you sync or save in this Admin panel, your URL is automatically saved to <code>public/config.json</code>. Commit this file and push to GitHub so your live site connects automatically.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Template Directory Header & Filter Pills */}
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-                    <span>Ready-to-Use Import Templates for Google Sheets</span>
-                    <span className="px-2 py-0.5 text-xs bg-slate-200 text-slate-800 font-bold rounded-full">
-                      {SHEET_TEMPLATES.length} Templates
-                    </span>
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Click <strong>Download CSV</strong> to open in Excel/Sheets, <strong>Copy for Sheets</strong> to paste columns, or <strong>Import CSV</strong> to upload records immediately.
-                  </p>
-                </div>
-
-                {/* Filter Pills */}
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {[
-                    { id: 'all', label: 'All Templates' },
-                    { id: 'services', label: 'Services' },
-                    { id: 'enquiries', label: 'Citizen Enquiries' },
-                    { id: 'pricelist', label: 'Price List' },
-                    { id: 'notices', label: 'Notice Board' },
-                    { id: 'quicklinks', label: 'Quick Links' },
-                    { id: 'citizens', label: 'Citizen Registry' }
-                  ].map(f => (
-                    <button
-                      key={f.id}
-                      type="button"
-                      onClick={() => setTemplateFilterCategory(f.id)}
-                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
-                        templateFilterCategory === f.id
-                          ? 'bg-blue-700 text-white'
-                          : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Template Cards Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {SHEET_TEMPLATES.filter(t => templateFilterCategory === 'all' || t.id === templateFilterCategory).map(template => {
-                  const isCopied = copiedTemplateId === template.id;
-                  const isUploading = isImportingFile && activeImportingId === template.id;
-
-                  return (
-                    <div
-                      key={template.id}
-                      className="bg-white rounded-2xl border border-slate-200 hover:border-blue-400 p-5 shadow-xs transition-all flex flex-col justify-between space-y-4"
-                    >
-                      <div className="space-y-3">
-                        {/* Top Badges */}
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase rounded-md bg-blue-100 text-blue-800">
-                            {template.badge}
-                          </span>
-                          <span className="text-[11px] font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold">
-                            Sheet Tab: <strong>{template.sheetTabName}</strong>
-                          </span>
-                        </div>
-
-                        {/* Title & Description */}
-                        <div>
-                          <h4 className="text-sm font-bold text-slate-900 group-hover:text-blue-700">
-                            {template.title}
-                          </h4>
-                          <span className="text-xs font-medium text-slate-500 block">
-                            {template.hindiTitle}
-                          </span>
-                          <p className="text-xs text-slate-600 mt-1.5 line-clamp-3 leading-relaxed">
-                            {template.description}
-                          </p>
-                        </div>
-
-                        {/* Columns Preview Pill List */}
-                        <div className="pt-1">
-                          <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1.5 font-medium">
-                            <span>Columns ({template.headers.length}):</span>
-                            <span>{template.sampleRows.length} Sample Rows</span>
-                          </div>
-                          <div className="flex flex-wrap gap-1 max-h-16 overflow-y-auto pr-1">
-                            {template.headers.slice(0, 6).map(h => (
-                              <span
-                                key={h}
-                                className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 text-slate-700 text-[10px] font-mono rounded"
-                              >
-                                {h}
-                              </span>
-                            ))}
-                            {template.headers.length > 6 && (
-                              <span className="px-1.5 py-0.5 bg-slate-50 text-slate-400 text-[10px] rounded font-medium">
-                                +{template.headers.length - 6} more
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="space-y-2 pt-3 border-t border-slate-100">
-                        {/* Primary Buttons Row */}
-                        <div className="grid grid-cols-2 gap-2">
-                          <a
-                            href={`/api/templates/${template.id}.csv`}
-                            download={template.fileName}
-                            onClick={() => downloadCsvTemplate(template)}
-                            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors shadow-2xs"
-                            title="Download CSV Template with Hindi & English support"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            <span>Download CSV</span>
-                          </a>
-
-                          <button
-                            type="button"
-                            onClick={() => handleCopyTemplateHeaders(template)}
-                            className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-colors border shadow-2xs ${
-                              isCopied
-                                ? 'bg-emerald-600 text-white border-emerald-600'
-                                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
-                            }`}
-                            title="Copy tab-delimited headers to paste directly into Google Sheets (Ctrl+V)"
-                          >
-                            {isCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5 text-blue-600" />}
-                            <span>{isCopied ? 'Copied Headers!' : 'Copy for Sheets'}</span>
-                          </button>
-                        </div>
-
-                        {/* Secondary Row: Preview & Direct CSV Import */}
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedTemplateForPreview(template)}
-                            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold transition-colors"
-                          >
-                            <Table className="w-3 h-3 text-slate-500" />
-                            <span>Preview Rows</span>
-                          </button>
-
-                          <label
-                            className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer ${
-                              isUploading
-                                ? 'bg-amber-100 text-amber-800 cursor-wait'
-                                : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200'
-                            }`}
-                            title="Upload completed CSV to import directly into database"
-                          >
-                            {isUploading ? (
-                              <>
-                                <RefreshCw className="w-3 h-3 animate-spin text-amber-600" />
-                                <span>Importing...</span>
-                              </>
-                            ) : (
-                              <>
-                                <UploadCloud className="w-3 h-3 text-blue-600" />
-                                <span>Import .CSV</span>
-                              </>
-                            )}
-                            <input
-                              type="file"
-                              accept=".csv,text/csv"
-                              disabled={isUploading}
-                              className="hidden"
-                              onChange={(e) => handleFileUpload(template.id, e)}
-                            />
-                          </label>
-                        </div>
-                      </div>
-
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Master Multi-Tab Google Sheet 1-Click Guide */}
-            <div className="bg-slate-900 text-slate-200 rounded-2xl p-6 sm:p-7 space-y-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
-                <div>
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-2">
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Master Multi-Tab Database</span>
-                  </div>
-                  <h3 className="text-lg sm:text-xl font-black text-white">
-                    One Single Google Sheet for Everything (Services, Enquiries, PriceList, Notices, QuickLinks, Citizens)
-                  </h3>
-                  <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-2xl leading-relaxed">
-                    You don't need 6 different spreadsheets. You can have 1 master spreadsheet with 7 organized tabs, automatically created and formatted in 2 seconds using our Google Apps Script macro!
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleCopyScriptCode}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors shadow-lg shrink-0"
-                >
-                  {copiedCode ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
-                  <span>{copiedCode ? 'Code.gs Copied!' : 'Copy Code.gs Script'}</span>
-                </button>
-              </div>
-
-              {/* 3 Simple Setup Steps */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                <div className="p-4 rounded-xl bg-slate-800/80 border border-slate-700 space-y-2">
-                  <div className="w-6 h-6 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center">1</div>
-                  <h4 className="font-bold text-white text-sm">Create New Sheet & Open Script</h4>
-                  <p className="text-slate-400 text-[11px] leading-relaxed">
-                    Open <a href="https://sheets.new" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-semibold">sheets.new</a>, then click <strong>Extensions &gt; Apps Script</strong>. (Important: Do not use script.google.com directly; open it from inside your spreadsheet).
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-xl bg-slate-800/80 border border-slate-700 space-y-2">
-                  <div className="w-6 h-6 rounded-full bg-emerald-600 text-white font-bold text-xs flex items-center justify-center">2</div>
-                  <h4 className="font-bold text-white text-sm">Paste Code.gs & Click Run</h4>
-                  <p className="text-slate-400 text-[11px] leading-relaxed">
-                    Delete any blank code, paste the script below, click 💾 <strong>Save</strong>, then click ▶ <strong>Run</strong>. When prompted for permissions, click <strong>Review permissions &gt; Advanced &gt; Go to (unsafe) &gt; Allow</strong>. All 7 tabs are created in 2 seconds!
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-xl bg-slate-800/80 border border-slate-700 space-y-2">
-                  <div className="w-6 h-6 rounded-full bg-amber-600 text-white font-bold text-xs flex items-center justify-center">3</div>
-                  <h4 className="font-bold text-white text-sm">Deploy Web App & Paste URL</h4>
-                  <p className="text-slate-400 text-[11px] leading-relaxed">
-                    Click <strong>Deploy &gt; New deployment &gt; Web app</strong>. Set <strong>Who has access: Anyone</strong> (DO NOT select "Only myself"!). Copy the resulting URL ending in <strong>/exec</strong> and paste it in the sync box above!
-                  </p>
-                </div>
-              </div>
-
-              {/* Collapsible / Scrollable Code Viewer */}
-              <div className="border border-slate-700 rounded-xl overflow-hidden">
-                <div className="bg-slate-950 text-slate-300 px-4 py-2.5 flex items-center justify-between text-xs font-mono">
-                  <span>Google Apps Script Code (Code.gs) - Supports All 6 Templates + Settings</span>
-                  <button
-                    type="button"
-                    onClick={handleCopyScriptCode}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] font-sans"
-                  >
-                    {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedCode ? 'Copied!' : 'Copy Code'}</span>
-                  </button>
-                </div>
-                <pre className="p-4 bg-slate-950/70 text-slate-300 font-mono text-[11px] leading-relaxed max-h-64 overflow-y-auto">
-                  {GOOGLE_APPS_SCRIPT_CODE}
-                </pre>
-              </div>
-            </div>
-
-          </div>
-        )}
-
       </div>
 
-      {/* SERVICE ADD / EDIT MODAL */}
+      {/* SERVICE ADD / EDIT MODAL (WITH PICTURE URL & LIVE PREVIEW) */}
       {isServiceModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-2xl w-full p-6 space-y-5 my-8 shadow-2xl border border-slate-200">
             <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-900">
-                {editingServiceId ? 'Edit Service' : 'Add New Service (Instant Publish)'}
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Layers className="w-4 h-4 text-blue-600" />
+                <span>{editingServiceId ? 'Edit Service & Picture' : 'Add New Service (Instant Publish)'}</span>
               </h3>
               <button
                 type="button"
                 onClick={() => setIsServiceModalOpen(false)}
-                className="text-slate-400 hover:text-slate-700 text-sm font-bold"
+                className="text-slate-400 hover:text-slate-700 text-sm font-bold cursor-pointer"
               >
                 ✕
               </button>
@@ -2223,6 +1103,36 @@ export const AdminDashboard: React.FC = () => {
             )}
 
             <form onSubmit={(e) => { e.preventDefault(); e.stopPropagation(); handleSaveService(e); }} className="space-y-4">
+              
+              {/* Picture URL & Live Preview */}
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
+                <label className="block text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Service Picture URL (Photo displayed on Portal)</span>
+                </label>
+                <div className="flex gap-3 items-center">
+                  <input
+                    type="url"
+                    value={serviceForm.image_url || ''}
+                    onChange={(e) => setServiceForm({ ...serviceForm, image_url: e.target.value })}
+                    placeholder="https://images.unsplash.com/... or any photo URL"
+                    className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+                  />
+                  {serviceForm.image_url ? (
+                    <div className="w-16 h-12 rounded-lg overflow-hidden border border-slate-300 shrink-0 bg-slate-200 shadow-2xs">
+                      <img
+                        src={serviceForm.image_url}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                        onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                      />
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-slate-400 italic shrink-0">Default photo used if empty</span>
+                  )}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -2234,7 +1144,7 @@ export const AdminDashboard: React.FC = () => {
                     value={serviceForm.service_name_en || ''}
                     onChange={(e) => setServiceForm({ ...serviceForm, service_name_en: e.target.value })}
                     placeholder="e.g. Aadhaar Address Update"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
                   />
                 </div>
                 <div>
@@ -2247,7 +1157,7 @@ export const AdminDashboard: React.FC = () => {
                     value={serviceForm.service_name_hi || ''}
                     onChange={(e) => setServiceForm({ ...serviceForm, service_name_hi: e.target.value })}
                     placeholder="उदा. आधार पता सुधार"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
                   />
                 </div>
               </div>
@@ -2262,8 +1172,8 @@ export const AdminDashboard: React.FC = () => {
                     required
                     value={serviceForm.category || ''}
                     onChange={(e) => setServiceForm({ ...serviceForm, category: e.target.value })}
-                    placeholder="Aadhaar, Voter ID, Ration Card, etc."
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs"
+                    placeholder="Aadhaar, Ration Card, etc."
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
                   />
                 </div>
                 <div>
@@ -2273,15 +1183,15 @@ export const AdminDashboard: React.FC = () => {
                   <select
                     value={serviceForm.icon || 'CreditCard'}
                     onChange={(e) => setServiceForm({ ...serviceForm, icon: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
                   >
-                    <option value="CreditCard">CreditCard (ID / Plastic)</option>
+                    <option value="CreditCard">CreditCard (ID / PVC Plastic)</option>
                     <option value="FileText">FileText (Certificates / Form)</option>
                     <option value="Heart">Heart (Ayushman Health)</option>
                     <option value="Users">Users (Family / Ration / Voter)</option>
                     <option value="CheckCircle">CheckCircle (Verification)</option>
-                    <option value="Smartphone">Smartphone (Mobile / Recharge)</option>
-                    <option value="Layers">Layers (General Digital)</option>
+                    <option value="Smartphone">Smartphone (Mobile)</option>
+                    <option value="Printer">Printer (Print / Photo)</option>
                   </select>
                 </div>
                 <div>
@@ -2291,7 +1201,7 @@ export const AdminDashboard: React.FC = () => {
                   <select
                     value={serviceForm.status || 'Active'}
                     onChange={(e) => setServiceForm({ ...serviceForm, status: e.target.value as any })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
                   >
                     <option value="Active">Active (Visible)</option>
                     <option value="Disabled">Disabled (Hidden)</option>
@@ -2307,10 +1217,9 @@ export const AdminDashboard: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    required
                     value={serviceForm.short_description_en || ''}
                     onChange={(e) => setServiceForm({ ...serviceForm, short_description_en: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
                   />
                 </div>
                 <div>
@@ -2319,51 +1228,24 @@ export const AdminDashboard: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    required
                     value={serviceForm.short_description_hi || ''}
                     onChange={(e) => setServiceForm({ ...serviceForm, short_description_hi: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
                   />
                 </div>
               </div>
 
-              {/* Full Descriptions */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Full Detail Explanation (English)
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={serviceForm.full_description_en || ''}
-                    onChange={(e) => setServiceForm({ ...serviceForm, full_description_en: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Full Detail Explanation (Hindi)
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={serviceForm.full_description_hi || ''}
-                    onChange={(e) => setServiceForm({ ...serviceForm, full_description_hi: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs"
-                  />
-                </div>
-              </div>
-
-              {/* Required Documents (One per line) */}
+              {/* Required Documents */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Required Documents (Enter each document on a NEW line)
                 </label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={docsInput}
                   onChange={(e) => setDocsInput(e.target.value)}
-                  placeholder="Original Aadhaar Card&#10;Registered Mobile Phone for OTP&#10;Address Proof (Electricity Bill/Voter ID)"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono"
+                  placeholder="Original Aadhaar Card&#10;Registered Mobile Number"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono"
                 />
               </div>
 
@@ -2371,13 +1253,13 @@ export const AdminDashboard: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Estimated Time (e.g. 1 to 3 Days)
+                    Estimated Time (e.g. 1 to 3 Working Days)
                   </label>
                   <input
                     type="text"
                     value={serviceForm.estimated_time || ''}
                     onChange={(e) => setServiceForm({ ...serviceForm, estimated_time: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs"
                   />
                 </div>
                 <div className="pt-4">
@@ -2398,24 +1280,25 @@ export const AdminDashboard: React.FC = () => {
                   type="button"
                   disabled={isSavingService}
                   onClick={() => setIsServiceModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg disabled:opacity-50"
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
-                  type="button"
-                  id="btn-modal-save-service"
+                  type="submit"
                   disabled={isSavingService}
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleSaveService(e); }}
-                  className="px-5 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-lg shadow-xs flex items-center gap-1.5 disabled:opacity-60 cursor-pointer"
+                  className="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer flex items-center gap-2 disabled:opacity-60"
                 >
                   {isSavingService ? (
                     <>
                       <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>Saving Service...</span>
+                      <span>Saving...</span>
                     </>
                   ) : (
-                    <span>{editingServiceId ? 'Update Service' : 'Save & Publish Service'}</span>
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>{editingServiceId ? 'Update Service' : 'Publish Service Live'}</span>
+                    </>
                   )}
                 </button>
               </div>
@@ -2424,31 +1307,26 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* SERVICE DELETE CONFIRMATION DIALOG (Safe alternative to window.confirm) */}
+      {/* DELETE SERVICE CONFIRMATION MODAL */}
       {serviceToDelete && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl border border-slate-200">
-            <div className="w-12 h-12 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
-              <Trash2 className="w-6 h-6" />
-            </div>
-            <div className="text-center space-y-1">
-              <h3 className="text-base font-bold text-slate-900">Delete Service</h3>
-              <p className="text-xs text-slate-500">
-                Are you sure you want to remove <strong>"{serviceToDelete.service_name_en}"</strong>? This will remove it from the citizen portal.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 pt-2">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-xl border border-slate-200">
+            <h3 className="text-base font-bold text-slate-900">Delete Service</h3>
+            <p className="text-xs text-slate-600">
+              Are you sure you want to delete <strong>"{serviceToDelete.service_name_en}"</strong>? This will remove it from the website immediately.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setServiceToDelete(null)}
-                className="flex-1 px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+                className="px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded-xl"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleConfirmDeleteService}
-                className="flex-1 px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-xs transition-colors"
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl"
               >
                 Delete
               </button>
@@ -2457,427 +1335,136 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* ENQUIRY DELETE CONFIRMATION DIALOG (Safe alternative to window.confirm) */}
-      {enquiryToDelete && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl border border-slate-200">
-            <div className="w-12 h-12 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
-              <Trash2 className="w-6 h-6" />
-            </div>
-            <div className="text-center space-y-1">
-              <h3 className="text-base font-bold text-slate-900">Delete Enquiry</h3>
-              <p className="text-xs text-slate-500">
-                Are you sure you want to remove enquiry <strong>{enquiryToDelete.enquiry_id}</strong> from <strong>"{enquiryToDelete.customer_name || enquiryToDelete.applicant_name}"</strong>?
-              </p>
-            </div>
-            <div className="flex items-center gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setEnquiryToDelete(null)}
-                className="flex-1 px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  const id = enquiryToDelete.enquiry_id;
-                  setEnquiryToDelete(null);
-                  await deleteEnquiry(id);
-                  setServiceSuccessToast(`Enquiry ${id} deleted.`);
-                  setTimeout(() => setServiceSuccessToast(null), 3000);
-                }}
-                className="flex-1 px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-xs transition-colors cursor-pointer"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* CLEAR ALL ENQUIRIES CONFIRMATION DIALOG */}
-      {isClearEnquiriesModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl border border-slate-200">
-            <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
-              <Trash2 className="w-6 h-6" />
-            </div>
-            <div className="text-center space-y-1">
-              <h3 className="text-base font-bold text-slate-900">Clear All Enquiries</h3>
-              <p className="text-xs text-slate-500">
-                This will remove all {enquiries.length} current enquiries from the portal database. Submissions sent to your Google Sheet remain stored in your spreadsheet.
-              </p>
-            </div>
-            <div className="flex items-center gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsClearEnquiriesModalOpen(false)}
-                className="flex-1 px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={isClearingEnquiries}
-                onClick={async () => {
-                  setIsClearingEnquiries(true);
-                  try {
-                    await clearAllEnquiries();
-                    setIsClearEnquiriesModalOpen(false);
-                    setServiceSuccessToast('All enquiries cleared successfully.');
-                    setTimeout(() => setServiceSuccessToast(null), 3000);
-                  } finally {
-                    setIsClearingEnquiries(false);
-                  }
-                }}
-                className="flex-1 px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-xs transition-colors cursor-pointer disabled:opacity-50"
-              >
-                {isClearingEnquiries ? 'Clearing...' : 'Clear All'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TEMPLATE SAMPLE DATA & SCHEMA EXPLORER MODAL */}
-      {selectedTemplateForPreview && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-5xl w-full p-6 sm:p-7 space-y-6 my-8 shadow-2xl border border-slate-200">
-            
-            {/* Modal Header */}
-            <div className="flex items-start justify-between border-b border-slate-100 pb-4 gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase rounded-md bg-blue-100 text-blue-800">
-                    {selectedTemplateForPreview.badge}
-                  </span>
-                  <span className="text-xs font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                    Sheet Tab: {selectedTemplateForPreview.sheetTabName}
-                  </span>
-                </div>
-                <h3 className="text-lg font-black text-slate-900">
-                  {selectedTemplateForPreview.title}
-                </h3>
-                <span className="text-xs text-slate-500 font-medium">
-                  {selectedTemplateForPreview.hindiTitle} • {selectedTemplateForPreview.fileName}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <a
-                  href={`/api/templates/${selectedTemplateForPreview.id}.csv`}
-                  download={selectedTemplateForPreview.fileName}
-                  onClick={() => downloadCsvTemplate(selectedTemplateForPreview)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs shrink-0"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download .CSV</span>
-                </a>
-                <button
-                  type="button"
-                  onClick={() => handleCopyTemplateHeaders(selectedTemplateForPreview)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold transition-colors shadow-2xs shrink-0"
-                >
-                  {copiedTemplateId === selectedTemplateForPreview.id ? (
-                    <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  ) : (
-                    <Copy className="w-3.5 h-3.5" />
-                  )}
-                  <span>{copiedTemplateId === selectedTemplateForPreview.id ? 'Copied!' : 'Copy for Sheets'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedTemplateForPreview(null)}
-                  className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center font-bold text-base transition-colors"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-
-            {/* Template Description */}
-            <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-              {selectedTemplateForPreview.description}
-            </p>
-
-            {/* Section 1: Columns Schema & Instructions */}
-            <div className="space-y-2.5">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <HelpCircle className="w-3.5 h-3.5 text-blue-600" />
-                <span>Column Field Requirements & Explanations ({selectedTemplateForPreview.columnsExplanation.length} Fields)</span>
-              </h4>
-
-              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs max-h-56 overflow-y-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 sticky top-0">
-                    <tr>
-                      <th className="px-3 py-2">Column Header</th>
-                      <th className="px-3 py-2">Requirement</th>
-                      <th className="px-3 py-2">Description / Guidance</th>
-                      <th className="px-3 py-2">Sample Value</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white">
-                    {selectedTemplateForPreview.columnsExplanation.map((col, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/80">
-                        <td className="px-3 py-2 font-mono font-bold text-blue-800 text-[11px]">
-                          {col.key}
-                        </td>
-                        <td className="px-3 py-2">
-                          {col.required ? (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800">
-                              Required *
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">
-                              Optional
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-slate-600 text-[11px]">
-                          {col.description}
-                        </td>
-                        <td className="px-3 py-2 font-mono text-slate-500 text-[11px] truncate max-w-xs">
-                          {col.sample}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Section 2: Live Rendered Sample Rows Table */}
-            <div className="space-y-2.5">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <Table className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Sample Data Rows Preview (as seen in Google Sheets)</span>
-              </h4>
-
-              <div className="border border-slate-200 rounded-xl overflow-x-auto shadow-2xs max-h-60 overflow-y-auto">
-                <table className="w-full text-left text-xs whitespace-nowrap">
-                  <thead className="bg-slate-800 text-slate-200 font-bold border-b border-slate-700 sticky top-0">
-                    <tr>
-                      <th className="px-2.5 py-2 font-mono text-[10px] text-slate-400">#</th>
-                      {selectedTemplateForPreview.headers.map(h => (
-                        <th key={h} className="px-3 py-2 font-mono text-[11px]">
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white">
-                    {selectedTemplateForPreview.sampleRows.map((row, rIdx) => (
-                      <tr key={rIdx} className="hover:bg-slate-50">
-                        <td className="px-2.5 py-2 font-mono text-slate-400 text-[10px] bg-slate-50 border-r border-slate-200">
-                          {rIdx + 1}
-                        </td>
-                        {row.map((val, cIdx) => (
-                          <td key={cIdx} className="px-3 py-2 text-slate-800 text-xs">
-                            {String(val)}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Modal Bottom Bar */}
-            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-              <span className="text-[11px] text-slate-500">
-                UTF-8 Devanagari formatted for MS Excel, Google Sheets, LibreOffice & Apple Numbers.
-              </span>
-              <button
-                type="button"
-                onClick={() => setSelectedTemplateForPreview(null)}
-                className="px-5 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
-              >
-                Close Preview
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* CITIZEN APPLICATION / ENQUIRY DETAILS & STATUS UPDATE MODAL */}
+      {/* ENQUIRY DETAILS MODAL */}
       {selectedEnquiryForDetails && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 p-6 space-y-6 animate-in fade-in zoom-in-95 duration-150">
-            
-            {/* Modal Header */}
-            <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-mono text-xs font-extrabold text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                    {selectedEnquiryForDetails.enquiry_id}
-                  </span>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                    Citizen Request
-                  </span>
-                </div>
-                <h3 className="text-xl font-extrabold text-slate-900">
-                  {selectedEnquiryForDetails.customer_name}
+                <span className="font-mono text-xs text-blue-700 font-bold bg-blue-50 px-2 py-0.5 rounded">
+                  {selectedEnquiryForDetails.enquiry_id}
+                </span>
+                <h3 className="text-base font-bold text-slate-900 mt-1">
+                  {selectedEnquiryForDetails.customer_name || selectedEnquiryForDetails.applicant_name}
                 </h3>
-                {selectedEnquiryForDetails.father_or_husband_name && (
-                  <p className="text-xs text-slate-500">
-                    S/O, W/O: {selectedEnquiryForDetails.father_or_husband_name}
-                  </p>
-                )}
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedEnquiryForDetails(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
+                className="text-slate-400 hover:text-slate-700 font-bold"
               >
-                <X className="w-5 h-5" />
+                ✕
               </button>
             </div>
 
-            {/* Quick Status Changer Box */}
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Update Application Status:
-                </span>
-                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
-                  selectedEnquiryForDetails.status === 'Completed'
-                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                    : selectedEnquiryForDetails.status === 'Processing'
-                    ? 'bg-indigo-100 text-indigo-800 border-indigo-300'
-                    : selectedEnquiryForDetails.status === 'Contacted'
-                    ? 'bg-amber-100 text-amber-800 border-amber-300'
-                    : selectedEnquiryForDetails.status === 'New'
-                    ? 'bg-blue-100 text-blue-800 border-blue-300'
-                    : 'bg-rose-100 text-rose-800 border-rose-300'
-                }`}>
-                  Current: {selectedEnquiryForDetails.status}
-                </span>
-              </div>
-
-              {/* 1-Click Status Buttons */}
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                {[
-                  { key: 'New', label: 'New', sub: 'प्राप्त हुआ', bg: 'hover:bg-blue-50 hover:border-blue-300', active: 'bg-blue-600 text-white border-blue-600' },
-                  { key: 'Contacted', label: 'Contacted', sub: 'दस्तावेज जांच', bg: 'hover:bg-amber-50 hover:border-amber-300', active: 'bg-amber-600 text-white border-amber-600' },
-                  { key: 'Processing', label: 'Processing', sub: 'प्रक्रियाधीन', bg: 'hover:bg-indigo-50 hover:border-indigo-300', active: 'bg-indigo-600 text-white border-indigo-600' },
-                  { key: 'Completed', label: 'Completed', sub: 'कार्य पूर्ण', bg: 'hover:bg-emerald-50 hover:border-emerald-300', active: 'bg-emerald-600 text-white border-emerald-600' },
-                  { key: 'Cancelled', label: 'Cancelled', sub: 'निरस्त', bg: 'hover:bg-rose-50 hover:border-rose-300', active: 'bg-rose-600 text-white border-rose-600' }
-                ].map((st) => {
-                  const isCur = selectedEnquiryForDetails.status === st.key;
-                  return (
-                    <button
-                      key={st.key}
-                      type="button"
-                      onClick={async () => {
-                        const newStatus = st.key as any;
-                        await updateEnquiryStatus(selectedEnquiryForDetails.enquiry_id, newStatus);
-                        setSelectedEnquiryForDetails({ ...selectedEnquiryForDetails, status: newStatus });
-                        setServiceSuccessToast(`Status updated to "${newStatus}" for ${selectedEnquiryForDetails.customer_name}`);
-                        setTimeout(() => setServiceSuccessToast(null), 3000);
-                      }}
-                      className={`p-2 rounded-xl text-center border font-bold text-xs transition-all ${
-                        isCur ? st.active : `bg-white text-slate-700 border-slate-200 ${st.bg}`
-                      }`}
-                    >
-                      <div>{st.label}</div>
-                      <div className={`text-[10px] font-normal ${isCur ? 'text-white/90' : 'text-slate-400'}`}>
-                        {st.sub}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Information Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              <div className="p-3 bg-slate-50 rounded-xl space-y-1 border border-slate-100">
-                <span className="text-slate-400 block font-semibold text-[11px]">Requested Service:</span>
-                <span className="font-extrabold text-slate-900 text-sm block">
-                  {selectedEnquiryForDetails.service_name}
-                </span>
-                <span className="text-[10px] text-blue-700 font-bold block">
-                  Category: {selectedEnquiryForDetails.category || 'Jan Seva Kendra'}
-                </span>
-              </div>
-
-              <div className="p-3 bg-slate-50 rounded-xl space-y-1 border border-slate-100">
-                <span className="text-slate-400 block font-semibold text-[11px]">Priority & Contact Preference:</span>
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded font-extrabold text-[10px] bg-blue-100 text-blue-800">
-                    {selectedEnquiryForDetails.urgency || 'Normal Priority'}
-                  </span>
-                  <span className="text-slate-600 font-bold">
-                    Prefers: {selectedEnquiryForDetails.preferred_contact}
-                  </span>
+            <div className="space-y-3 text-xs text-slate-700">
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl">
+                <div>
+                  <span className="font-bold text-slate-500 block">Mobile:</span>
+                  <span className="font-mono text-slate-900 font-bold">{selectedEnquiryForDetails.mobile}</span>
                 </div>
-                <div className="text-[11px] text-slate-500 pt-0.5">
-                  Applied: {selectedEnquiryForDetails.created_at ? new Date(selectedEnquiryForDetails.created_at).toLocaleString() : 'Recent'}
+                <div>
+                  <span className="font-bold text-slate-500 block">Service:</span>
+                  <span className="font-bold text-slate-900">{selectedEnquiryForDetails.service_name}</span>
+                </div>
+                <div>
+                  <span className="font-bold text-slate-500 block">Category:</span>
+                  <span>{selectedEnquiryForDetails.category || 'General'}</span>
+                </div>
+                <div>
+                  <span className="font-bold text-slate-500 block">Preferred Contact:</span>
+                  <span>{selectedEnquiryForDetails.preferred_contact || 'Call'}</span>
                 </div>
               </div>
 
-              <div className="p-3 bg-slate-50 rounded-xl space-y-1 border border-slate-100 sm:col-span-2">
-                <span className="text-slate-400 block font-semibold text-[11px]">Citizen Mobile & Location:</span>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-mono text-sm font-extrabold text-slate-900">
-                    +91 {selectedEnquiryForDetails.mobile}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <a
-                      href={`tel:${selectedEnquiryForDetails.mobile.replace(/\D/g, '')}`}
-                      className="inline-flex items-center gap-1 px-3 py-1 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-lg text-xs transition-colors shadow-xs"
-                    >
-                      <Phone className="w-3.5 h-3.5" />
-                      <span>Call Citizen</span>
-                    </a>
-                    <a
-                      href={`https://wa.me/91${selectedEnquiryForDetails.mobile.replace(/\D/g, '')}?text=${encodeURIComponent(`Namaste ${selectedEnquiryForDetails.customer_name}, this is Balaji Communication Jan Seva Kendra Gaini. Your application ${selectedEnquiryForDetails.enquiry_id} for ${selectedEnquiryForDetails.service_name} status is: ${selectedEnquiryForDetails.status}.`)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-colors shadow-xs"
-                    >
-                      <MessageCircle className="w-3.5 h-3.5 fill-white" />
-                      <span>WhatsApp Citizen</span>
-                    </a>
-                  </div>
+              {selectedEnquiryForDetails.address && (
+                <div>
+                  <span className="font-bold text-slate-500 block">Address:</span>
+                  <p className="text-slate-800">{selectedEnquiryForDetails.address}</p>
                 </div>
-                {selectedEnquiryForDetails.address && (
-                  <p className="text-xs text-slate-600 pt-1">
-                    📍 {selectedEnquiryForDetails.address} {selectedEnquiryForDetails.village ? `(${selectedEnquiryForDetails.village})` : ''}
-                  </p>
-                )}
-              </div>
+              )}
 
               {selectedEnquiryForDetails.message && (
-                <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-200/80 sm:col-span-2 space-y-1">
-                  <span className="text-amber-800 font-bold block text-[11px]">
-                    Citizen Note / Special Request:
-                  </span>
-                  <p className="text-xs text-slate-700 italic">
-                    "{selectedEnquiryForDetails.message}"
+                <div>
+                  <span className="font-bold text-slate-500 block">Message / Query:</span>
+                  <p className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-slate-800">
+                    {selectedEnquiryForDetails.message}
                   </p>
                 </div>
               )}
             </div>
 
-            {/* Modal Bottom Actions */}
-            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-              <span className="text-[11px] text-slate-500">
-                Changes are synchronized automatically with local storage and Google Sheets.
-              </span>
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setSelectedEnquiryForDetails(null)}
-                className="px-5 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold"
               >
-                Done
+                Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
 
+      {/* DELETE ENQUIRY CONFIRMATION MODAL */}
+      {enquiryToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-xl border border-slate-200">
+            <h3 className="text-base font-bold text-slate-900">Delete Citizen Enquiry</h3>
+            <p className="text-xs text-slate-600">
+              Are you sure you want to delete enquiry <strong>{enquiryToDelete.enquiry_id}</strong>?
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setEnquiryToDelete(null)}
+                className="px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await deleteEnquiry(enquiryToDelete.enquiry_id);
+                  setEnquiryToDelete(null);
+                }}
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CLEAR ALL ENQUIRIES CONFIRMATION MODAL */}
+      {isClearEnquiriesModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-xl border border-slate-200">
+            <h3 className="text-base font-bold text-slate-900">Clear All Enquiries</h3>
+            <p className="text-xs text-slate-600">
+              This will remove all {enquiries.length} stored enquiries from the local list. Existing records in Google Sheets will remain safe.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsClearEnquiriesModalOpen(false)}
+                className="px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100 rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await clearAllEnquiries();
+                  setIsClearEnquiriesModalOpen(false);
+                }}
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl"
+              >
+                Clear All
+              </button>
+            </div>
           </div>
         </div>
       )}

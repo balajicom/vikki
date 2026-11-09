@@ -8,17 +8,9 @@ import { Footer } from './components/Footer';
 import { StickyMobileBar } from './components/StickyMobileBar';
 import { ServiceModal } from './components/ServiceModal';
 import { EnquiryModal } from './components/EnquiryModal';
-
+import { SheetConfigModal } from './components/SheetConfigModal';
+import { AddServiceModal } from './components/AddServiceModal';
 import { HomePage } from './pages/HomePage';
-import { ServicesPage } from './pages/ServicesPage';
-import { AboutPage } from './pages/AboutPage';
-import { HowItWorksPage } from './pages/HowItWorksPage';
-import { DocumentsPage } from './pages/DocumentsPage';
-import { ContactPage } from './pages/ContactPage';
-import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
-import { TermsPage } from './pages/TermsPage';
-import { DirectApplicationPage } from './pages/DirectApplicationPage';
-import { TrackApplicationPage } from './pages/TrackApplicationPage';
 import { AdminLogin } from './pages/admin/AdminLogin';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 
@@ -27,7 +19,9 @@ function ScrollToTop() {
   const { pathname } = useLocation();
 
   useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    try {
+      window.scrollTo(0, 0);
+    } catch (e) {}
   }, [pathname]);
 
   return null;
@@ -39,44 +33,35 @@ export default function App() {
       <DataProvider>
         <Router>
           <ScrollToTop />
-          <div className="flex flex-col min-h-screen bg-white text-slate-900 font-sans antialiased selection:bg-blue-600 selection:text-white pb-14 md:pb-0">
-            {/* Header / Navigation */}
+          <div className="flex flex-col min-h-screen bg-slate-50 text-slate-900 font-sans antialiased selection:bg-blue-600 selection:text-white pb-14 md:pb-0">
+            {/* Simple Header with Helpline & Language */}
             <Header />
 
-            {/* Main Content Area */}
+            {/* Main Content Area: Services Catalog + Protected Admin Area */}
             <main className="flex-1">
               <Routes>
                 <Route path="/" element={<HomePage />} />
-                <Route path="/services" element={<ServicesPage />} />
-                <Route path="/about" element={<AboutPage />} />
-                <Route path="/how-it-works" element={<HowItWorksPage />} />
-                <Route path="/documents" element={<DocumentsPage />} />
-                <Route path="/contact" element={<ContactPage />} />
-                <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
-                <Route path="/terms" element={<TermsPage />} />
-                <Route path="/terms-conditions" element={<TermsPage />} />
-                <Route path="/apply" element={<DirectApplicationPage />} />
-                <Route path="/track" element={<TrackApplicationPage />} />
-
-                {/* Admin Routes */}
-                <Route path="/admin" element={<AdminLogin />} />
+                <Route path="/services" element={<HomePage />} />
+                <Route path="/login" element={<AdminLogin />} />
                 <Route path="/admin/login" element={<AdminLogin />} />
+                <Route path="/admin" element={<AdminDashboard />} />
                 <Route path="/admin/dashboard" element={<AdminDashboard />} />
-
-                {/* Catch-all fallback */}
+                {/* Fallback to HomePage for any other URL */}
                 <Route path="*" element={<HomePage />} />
               </Routes>
             </main>
 
-            {/* Detailed Government-Style Footer */}
+            {/* Simple Clean Footer */}
             <Footer />
 
-            {/* Mobile Bottom Navigation Bar (Android optimized) */}
+            {/* Mobile Bottom Bar for Instant Apply / Call / WhatsApp */}
             <StickyMobileBar />
 
-            {/* Modals for Details and Application / Enquiries */}
+            {/* Modals for Details, Application submission to Google Sheet, Google Sheet setup, and Add Service */}
             <ServiceModal />
             <EnquiryModal />
+            <SheetConfigModal />
+            <AddServiceModal />
           </div>
         </Router>
       </DataProvider>

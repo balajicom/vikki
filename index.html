@@ -43,6 +43,30 @@
   <body class="bg-slate-50 text-slate-900 antialiased font-sans">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Universal GitHub Pages / Static Server auto-loader:
+      // If hosted statically (such as GitHub Pages) where raw /src/main.tsx cannot execute,
+      // load the compiled production assets from ./assets/app.js automatically.
+      (function() {
+        if (window.location.hostname.indexOf('github.io') !== -1 || window.location.protocol === 'file:') {
+          setTimeout(function() {
+            var root = document.getElementById('root');
+            if (root && root.childNodes.length === 0) {
+              var link = document.createElement('link');
+              link.rel = 'stylesheet';
+              link.href = './assets/app.css';
+              document.head.appendChild(link);
+
+              var script = document.createElement('script');
+              script.type = 'module';
+              script.crossOrigin = 'anonymous';
+              script.src = './assets/app.js';
+              document.body.appendChild(script);
+            }
+          }, 250);
+        }
+      })();
+    </script>
   </body>
 </html>
 

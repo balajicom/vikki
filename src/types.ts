@@ -11,6 +11,7 @@ export interface Service {
   full_description_hi: string;
   required_documents: string[];
   icon: string; // Lucide icon name, e.g. 'CreditCard', 'FileText', 'UserCheck', etc.
+  image_url?: string; // High-quality service picture / photo
   status: 'Active' | 'Disabled';
   whatsapp_message?: string;
   estimated_time?: string;

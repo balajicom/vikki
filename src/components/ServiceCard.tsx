@@ -1,5 +1,5 @@
-import React from 'react';
-import { MessageCircle, FileText, ArrowRight, CheckCircle2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { MessageCircle, FileText, ArrowRight, CheckCircle2, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { Service } from '../types';
 import { getServiceIcon } from '../utils/iconHelper';
 import { useLanguage } from '../context/LanguageContext';
@@ -11,7 +11,8 @@ interface ServiceCardProps {
 
 export const ServiceCard: React.FC<ServiceCardProps> = ({ service }) => {
   const { language, t } = useLanguage();
-  const { settings, openServiceDetails, openEnquiryModal } = useData();
+  const { settings, openServiceDetails, openEnquiryModal, deleteService } = useData();
+  const [imageError, setImageError] = useState(false);
 
   const title = language === 'hi' ? service.service_name_hi : service.service_name_en;
   const secondaryTitle = language === 'hi' ? service.service_name_en : service.service_name_hi;
@@ -20,34 +21,62 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({ service }) => {
   const cleanWhatsApp = (settings.whatsapp_number || '919870677605').replace(/\D/g, '');
   const waMsg = service.whatsapp_message || `Hello Balaji Communication, I want information about ${service.service_name_en}.`;
 
+  // Fallback picture if not provided or broken
+  const defaultImage = 'https://images.unsplash.com/photo-1450133064473-71024230f91b?auto=format&fit=crop&w=600&q=80';
+  const displayImage = (!imageError && service.image_url && service.image_url.trim()) ? service.image_url : defaultImage;
+
   return (
     <div
       id={`service-card-${service.service_id}`}
-      className="bg-white rounded-xl border border-slate-200/90 hover:border-blue-400/80 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between overflow-hidden group"
+      className="bg-white rounded-2xl border border-slate-200 hover:border-blue-500/80 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between overflow-hidden group hover:-translate-y-1"
     >
-      <div className="p-5 sm:p-6">
-        {/* Top Header Row with Icon & Category Badge */}
-        <div className="flex items-start justify-between gap-3 mb-3.5">
-          <div className="w-12 h-12 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors duration-200 shrink-0">
-            {getServiceIcon(service.icon, { className: "w-6 h-6" })}
-          </div>
-          <div className="flex items-center gap-1.5 flex-wrap justify-end">
-            <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200/70">
-              {service.category}
-            </span>
+      {/* 1. Service Picture Banner */}
+      <div className="relative w-full h-44 sm:h-48 overflow-hidden bg-slate-100">
+        <img
+          src={displayImage}
+          alt={title}
+          loading="lazy"
+          onError={() => setImageError(true)}
+          className="w-full h-full object-cover object-center group-hover:scale-108 transition-transform duration-500 ease-out"
+        />
+
+        {/* Gradient Overlay for text contrast */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+
+        {/* Category & Badges on Picture */}
+        <div className="absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
+          <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-black/60 backdrop-blur-md text-white border border-white/20 shadow-xs">
+            {service.category}
+          </span>
+          <div className="flex items-center gap-1.5">
             {service.popular && (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+              <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 shadow-md uppercase tracking-wider">
                 Popular
               </span>
             )}
           </div>
         </div>
 
+        {/* Icon Overlay Badge at bottom corner of picture */}
+        <div className="absolute bottom-3 left-3 flex items-center gap-2">
+          <div className="w-10 h-10 rounded-xl bg-white/95 backdrop-blur-md text-blue-700 shadow-md flex items-center justify-center border border-white/40 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-200">
+            {getServiceIcon(service.icon, { className: "w-5 h-5" })}
+          </div>
+          {service.estimated_time && (
+            <span className="text-[10px] font-semibold text-white/90 bg-black/40 backdrop-blur-xs px-2 py-0.5 rounded-md line-clamp-1 max-w-[170px]">
+              ⏱ {service.estimated_time}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* 2. Content Body */}
+      <div className="p-4 sm:p-5 flex-1 flex flex-col">
         {/* Title & Subtitle */}
-        <h3 className="font-bold text-base sm:text-lg text-slate-900 leading-snug group-hover:text-blue-700 transition-colors">
+        <h3 className="font-bold text-base sm:text-lg text-slate-900 leading-snug group-hover:text-blue-700 transition-colors line-clamp-2">
           {title}
         </h3>
-        <p className="text-xs font-medium text-slate-500 mt-0.5 mb-2.5 line-clamp-1">
+        <p className="text-xs font-medium text-slate-500 mt-1 mb-2 line-clamp-1">
           {secondaryTitle}
         </p>
 
@@ -63,9 +92,9 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({ service }) => {
             : (typeof service.required_documents === 'string' ? (service.required_documents as string).split(/[;\n]+/).map(s => s.trim()).filter(Boolean) : []);
           if (docs.length === 0) return null;
           return (
-            <div className="bg-slate-50 rounded-lg p-2.5 border border-slate-100 mb-3">
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 mb-1">
-                <FileText className="w-3.5 h-3.5 text-blue-600" />
+            <div className="bg-slate-50 rounded-xl p-2.5 border border-slate-100 mt-auto mb-3">
+              <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 mb-0.5">
+                <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                 <span>{t('requiredDocuments')}:</span>
               </div>
               <p className="text-[11px] text-slate-600 truncate">
@@ -77,15 +106,15 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({ service }) => {
         })()}
       </div>
 
-      {/* Action Buttons Bar */}
-      <div className="px-5 pb-5 pt-0 mt-auto border-t border-slate-100 pt-3.5 flex flex-col gap-2">
+      {/* 3. Action Buttons Bar */}
+      <div className="px-4 pb-4 sm:px-5 sm:pb-5 pt-0 border-t border-slate-100 pt-3 flex flex-col gap-2">
         <div className="grid grid-cols-2 gap-2">
           {/* View Details */}
           <button
             type="button"
             id={`btn-details-${service.service_id}`}
             onClick={() => openServiceDetails(service)}
-            className="w-full py-2 px-2.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 rounded-lg transition-colors text-center"
+            className="w-full py-2 px-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 rounded-xl transition-colors text-center cursor-pointer"
           >
             {t('viewDetails')}
           </button>
@@ -95,7 +124,7 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({ service }) => {
             type="button"
             id={`btn-enquire-${service.service_id}`}
             onClick={() => openEnquiryModal(service)}
-            className="w-full py-2 px-2.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 active:bg-blue-900 rounded-lg transition-colors text-center shadow-xs"
+            className="w-full py-2 px-2.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 active:bg-blue-900 rounded-xl transition-colors text-center shadow-xs cursor-pointer"
           >
             {language === 'hi' ? 'ऑनलाइन आवेदन' : 'Apply Online'}
           </button>
@@ -107,7 +136,7 @@ export const ServiceCard: React.FC<ServiceCardProps> = ({ service }) => {
           target="_blank"
           rel="noopener noreferrer"
           id={`btn-wa-${service.service_id}`}
-          className="w-full py-1.5 px-3 text-[11px] font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
+          className="w-full py-1.5 px-3 text-[11px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 border border-emerald-200 rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
         >
           <MessageCircle className="w-3.5 h-3.5 fill-emerald-600 text-white" />
           <span>WhatsApp Query</span>

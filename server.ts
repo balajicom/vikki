@@ -881,9 +881,9 @@ app.post(['/api/enquiries', '/api/applications'], (req, res) => {
   }
   saveDatabase(db);
 
-  // If Google Apps Script Web App URL is configured, asynchronously send to Google Sheets
+  // If Google Apps Script Web App URL is configured and client didn't already dispatch directly
   const sheetTarget = db.settings.google_sheet_webapp_url || db.settings.google_sheet_url;
-  if (sheetTarget && sheetTarget.includes('script.google.com')) {
+  if (!req.body.skipGoogleSheet && sheetTarget && sheetTarget.includes('script.google.com')) {
     try {
       fetch(sheetTarget, {
         method: 'POST',

@@ -1,50 +1,59 @@
 export const GOOGLE_APPS_SCRIPT_CODE = `/**
  * =========================================================================
- * BALAJI COMMUNICATION - JAN SEVA KENDRA & CSC
- * MASTER GOOGLE APPS SCRIPT BACKEND (PRODUCTION GRADE - ALL TABS SUPPORTED)
+ * BALAJI COMMUNICATION - JAN SEVA KENDRA & DIGITAL SERVICES
+ * SINGLE-SHEET CITIZEN ENQUIRY STORAGE SCRIPT (OFFICIAL PRODUCTION)
  * =========================================================================
  * 
- * QUICK SETUP GUIDE (Takes 1-2 minutes):
- * 1. Open Google Sheets at https://sheets.new (or open your existing sheet)
- * 2. In Google Sheets menu, click: Extensions > Apps Script
- * 3. Delete any code already there, paste this entire code into Code.gs, and click Save (💾 icon)
- * 4. With "setupAllTemplateSheets" selected in the toolbar dropdown, click "Run" (▶ icon)
- *    -> Click "Review permissions" -> Choose your Google account
- *    -> Click "Advanced" -> Click "Go to Balaji Database (unsafe)" -> Click "Allow"
- *    -> All 7 organized tabs will be created instantly with headers and services!
- * 5. Click "Deploy" (top right) > "New deployment"
- *    - Click the gear icon next to "Select type" -> choose "Web app"
- *    - Description: "Balaji Database API"
- *    - Execute as: "Me" (your Google account)
- *    - WHO HAS ACCESS: "Anyone"  <--- [VERY IMPORTANT! Do NOT choose "Only myself"]
- * 6. Click "Deploy" -> Copy the Web App URL (ends with "/exec")
- * 7. Paste that URL into the Balaji Admin Dashboard > "Google Sheets / Web App Sync" box!
+ * PURPOSE:
+ * Automatically stores all user and citizen applications / enquiries submitted
+ * from the Balaji Communication website directly into a single Google Sheet
+ * named "Enquiries".
+ * 
+ * EASY 2-MINUTE SETUP:
+ * 1. Open Google Sheets at https://sheets.new (or open your existing Google Sheet).
+ * 2. In Google Sheets menu bar, click: Extensions > Apps Script.
+ * 3. Delete any default code in Code.gs, paste this ENTIRE code, and click Save (💾 icon).
+ * 4. In the toolbar function dropdown, make sure "setupEnquiriesSheet" is selected and click "Run" (▶ icon).
+ *    -> Click "Review permissions" -> Choose your Google Account.
+ *    -> Click "Advanced" -> Click "Go to Untitled project (unsafe)" -> Click "Allow".
+ *    -> An "Enquiries" sheet with headers and formatting will be created instantly!
+ * 5. Click "Deploy" (top right blue button) > "New deployment".
+ *    -> Click the gear icon next to "Select type" and select "Web app".
+ *    -> Description: "Balaji Enquiry Storage"
+ *    -> Execute as: "Me (your email)"
+ *    -> Who has access: "Anyone"  <--- [CRITICAL: Do NOT choose "Only myself"]
+ * 6. Click "Deploy" -> Copy the Web App URL (ends with "/exec").
+ * 7. Paste that URL into the Balaji Admin Dashboard > "Google Sheet Enquiry Setup" box.
  */
 
-// =========================================================================
-// SPREADSHEET CONFIGURATION
-// If you opened this script from inside Google Sheets (Extensions > Apps Script),
-// leave SPREADSHEET_ID empty (""). It will auto-detect your active spreadsheet.
-//
-// ONLY if you created a standalone script at script.google.com, paste your
-// Google Spreadsheet ID or full URL between the quotes below:
+// SPREADSHEET CONFIGURATION:
+// When opened from Extensions > Apps Script, leave SPREADSHEET_ID empty ("").
 var SPREADSHEET_ID = "";
-// =========================================================================
 
-/**
- * Robust helper to retrieve the spreadsheet whether container-bound or standalone.
- * If running in a standalone script without an ID, it automatically creates a new
- * Google Spreadsheet so the code NEVER throws an error!
- */
+var SHEET_NAME = "Enquiries";
+
+var HEADERS = [
+  "Timestamp",
+  "Reference ID",
+  "Citizen / Applicant Name",
+  "Father / Husband Name",
+  "Mobile Number",
+  "Service Required",
+  "Category",
+  "Village / Town",
+  "Full Address",
+  "Citizen Message / Remarks",
+  "Preferred Contact",
+  "Urgency",
+  "Application Status"
+];
+
 function getSpreadsheet() {
   var ss = null;
-
-  // 1. Check container-bound active spreadsheet
   try {
     ss = SpreadsheetApp.getActiveSpreadsheet();
   } catch (e) {}
 
-  // 2. Check explicitly defined SPREADSHEET_ID
   if (!ss && SPREADSHEET_ID && SPREADSHEET_ID.trim()) {
     var raw = SPREADSHEET_ID.trim();
     var cleanId = raw;
@@ -53,944 +62,226 @@ function getSpreadsheet() {
     }
     try {
       ss = SpreadsheetApp.openById(cleanId);
-    } catch (openErr) {
-      Logger.log("Failed to open spreadsheet by ID: " + openErr.toString());
-    }
-  }
-
-  // 3. Check previously stored script property
-  if (!ss) {
-    try {
-      var savedId = PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID");
-      if (savedId) {
-        ss = SpreadsheetApp.openById(savedId);
-      }
-    } catch (propErr) {}
-  }
-
-  // 4. Check active sheet parent
-  if (!ss) {
-    try {
-      var active = SpreadsheetApp.getActiveSheet();
-      if (active) ss = active.getParent();
-    } catch (e) {}
-  }
-
-  // 5. AUTO-CREATE FALLBACK: If user opened standalone script without binding, create a sheet automatically!
-  if (!ss) {
-    try {
-      ss = SpreadsheetApp.create("Balaji Communication - CSC & Jan Seva Kendra Master Database");
-      var newId = ss.getId();
-      try {
-        PropertiesService.getScriptProperties().setProperty("SPREADSHEET_ID", newId);
-      } catch (saveErr) {}
-      Logger.log("Auto-created new Google Spreadsheet: " + ss.getUrl() + " (ID: " + newId + ")");
-    } catch (createErr) {
-      Logger.log("Could not auto-create spreadsheet: " + createErr.toString());
-    }
+    } catch (err) {}
   }
 
   if (!ss) {
-    throw new Error(
-      "Spreadsheet not found! Please open this script directly from inside your Google Sheet: Extensions > Apps Script."
-    );
+    var active = SpreadsheetApp.getActiveSheet();
+    if (active) ss = active.getParent();
+  }
+
+  if (!ss) {
+    throw new Error("Spreadsheet not found! Please open this script from Extensions > Apps Script inside your Google Sheet.");
   }
   return ss;
 }
 
-// =========================================================================
-// 1. AUTO-SETUP MACRO (First function so it is selected by default in toolbar)
-// =========================================================================
-function setupAllTemplateSheets() {
+/**
+ * Initializes the single "Enquiries" sheet with clean headers, column styling, and frozen header row.
+ */
+function setupEnquiriesSheet() {
   var ss = getSpreadsheet();
-  Logger.log("Starting setup for spreadsheet: " + ss.getName());
+  var sheet = ss.getSheetByName(SHEET_NAME);
 
-  // 1. SERVICES TAB (Master Service Catalog)
-  try {
-    var srvSheet = getOrCreateSheet(ss, "Services");
-    srvSheet.clearContents();
-    var srvHeaders = [
-      "service_id", "service_name_en", "service_name_hi", "category",
-      "short_description_en", "short_description_hi", "full_description_en", "full_description_hi",
-      "required_documents", "icon", "status", "popular", "estimated_time", "whatsapp_message"
-    ];
-    srvSheet.appendRow(srvHeaders);
-    var defaultServices = [
-      ["srv-aadhaar-mob", "Aadhaar Mobile Number Update", "आधार मोबाइल नंबर अपडेट / जोड़ना", "Aadhaar", "Quick assistance for linking or updating active mobile number in Aadhaar.", "अपने आधार कार्ड में चालू मोबाइल नंबर लिंक या अपडेट करवाने के लिए आसान सहायता।", "Updating mobile number in Aadhaar is essential for receiving OTPs for banking, ITR verification, DigiLocker, and availing all government online benefits.", "आधार में मोबाइल नंबर लिंक होना बैंक, डिजीलॉकर, राशन कार्ड और सरकारी योजनाओं के ओटीपी के लिए अनिवार्य है।", "Original Aadhaar Card\\nActive Mobile SIM", "Smartphone", "Active", "yes", "24-48 Hours", "Hello Balaji Communication, I want information about Aadhaar Mobile Number Update."],
-      ["srv-aadhaar-corr", "Aadhaar Correction & Address Update", "आधार सुधार एवं पता बदलाव", "Aadhaar", "Name, DOB, gender, or address correction in your existing Aadhaar card with valid proof.", "आधार कार्ड में नाम, जन्मतिथि, लिंग अथवा पते में सुधार के लिए उचित दस्तावेजों के साथ आवेदन।", "Get corrections in demographic details updated in UIDAI database.", "UIDAI नियमों के अनुसार आधार कार्ड में नाम, पिता/पति का नाम, जन्मतिथि एवं आवासीय पता ठीक कराने हेतु सहायता।", "Existing Aadhaar Card copy\\nProof of Identity / Address", "UserCheck", "Active", "yes", "3-7 Working Days", "Hello Balaji Communication, I want information about Aadhaar Correction."],
-      ["srv-aadhaar-down", "Aadhaar Download & PVC Card Print", "आधार कार्ड डाउनलोड एवं पीवीसी कार्ड प्रिंट", "Aadhaar", "Instant e-Aadhaar PDF download and ordering durable plastic PVC Aadhaar card.", "तुरंत ई-आधार डाउनलोड और वॉटरप्रूफ सुरक्षित पीवीसी (प्लास्टिक) कार्ड बनवाने की सुविधा।", "Lost your physical Aadhaar card? Get high-quality e-Aadhaar downloaded instantly through OTP.", "यदि आधार खो गया है, तो तुरंत ओटीपी के माध्यम से ई-आधार डाउनलोड कराएं या पीवीसी प्लास्टिक कार्ड मंगवाएं।", "Aadhaar Number or Enrollment ID\\nRegistered Mobile Phone", "CreditCard", "Active", "yes", "Instant Download / 7-10 days Speed Post", "Hello Balaji Communication, I want information about Aadhaar Download and PVC Card."],
-      ["srv-ration-new", "New Ration Card Application", "नया राशन कार्ड ऑनलाइन आवेदन", "Ration Card", "Assistance in applying for new APL/BPL/Antyodaya ration cards for eligible families.", "पात्र परिवारों के लिए नया राशन कार्ड ऑनलाइन अप्लाई करने में सहायता।", "Complete documentation and online portal registration for fresh ration card applications.", "परिवार के सभी सदस्यों के विवरण, आधार एवं आय प्रमाण पत्र के साथ नए राशन कार्ड के लिए आवेदन।", "Head of Family Aadhaar & Photo\\nFamily Aadhaar copies\\nIncome Certificate\\nBank Passbook", "FileSpreadsheet", "Active", "yes", "15-30 Working Days", "Hello Balaji Communication, I want information about New Ration Card Apply."],
-      ["srv-ration-corr", "Ration Card Correction & Member Add/Remove", "राशन कार्ड संशोधन एवं यूनिट जोड़ना/हटाना", "Ration Card", "Add new family member/child, remove married member, or correct names in ration card.", "राशन कार्ड में नए बच्चे/सदस्य का नाम जोड़ना, नाम हटाना अथवा गलतियों में सुधार।", "Online submission for adding newborn children or daughters-in-law into existing ration cards.", "विवाह के पश्चात नई बहू का नाम जोड़ना या नवजात शिशु की यूनिट जोड़ने की ऑनलाइन प्रक्रिया।", "Original Ration Card Number\\nNew member Aadhaar / Birth Certificate", "Users", "Active", "no", "10-20 Working Days", "Hello Balaji Communication, I want information about Ration Card Member Addition."],
-      ["srv-pmkisan-reg", "PM Kisan Samman Nidhi Registration", "पीएम किसान सम्मान निधि नया पंजीकरण", "PM Kisan", "New farmer enrollment to receive ₹6,000 yearly direct benefit from Government of India.", "पात्र किसान भाइयों के लिए सालाना ₹6,000 सहायता प्राप्त करने हेतु नया ऑनलाइन पंजीकरण।", "Assistance for small and marginal farmer families to register under PM-KISAN scheme.", "पीएम-किसान योजना के अंतर्गत किसानों का ऑनलाइन रजिस्ट्रेशन, खतौनी भूलेख विवरण दर्ज करना।", "Farmer Aadhaar Card\\nKhatauni Land Record\\nBank Passbook\\nMobile linked with Aadhaar", "Tractor", "Active", "yes", "Departmental Verification", "Hello Balaji Communication, I want information about PM Kisan Registration."],
-      ["srv-pmkisan-kyc", "PM Kisan e-KYC & Status Check", "पीएम किसान ई-केवाईसी एवं किस्त स्थिति जांच", "PM Kisan", "Mandatory OTP/Biometric e-KYC to ensure continuous payment of PM Kisan installments.", "किस्त न रुकने पाए इसके लिए बायोमेट्रिक या आधार ओटीपी से तुरंत ई-केवाईसी करवाएं।", "If your PM-Kisan installment is stuck due to pending eKYC or land seeding, visit our center.", "अटकी हुई किस्तें चालू कराने और ई-केवाईसी फिंगरप्रिंट या ओटीपी द्वारा तुरंत पूर्ण कराने की सेवा।", "Aadhaar Card\\nAadhaar Registered Mobile", "ShieldCheck", "Active", "yes", "Instant (5 Minutes)", "Hello Balaji Communication, I want information about PM Kisan e-KYC."],
-      ["srv-ayushman-card", "Ayushman Card Apply & Download", "आयुष्मान भारत गोल्डन कार्ड (₹5 लाख मुफ्त इलाज)", "Ayushman", "Check eligibility under PM-JAY and apply/download your cashless hospital treatment card.", "प्रतिवर्ष ₹5 लाख तक के मुफ्त इलाज हेतु आयुष्मान भारत कार्ड की पात्रता जांच, आवेदन व डाउनलोड।", "Eligible families get cashless treatment up to ₹5 lakh per year in empanelled hospitals.", "पात्रता सूची या राशन कार्ड के आधार पर आयुष्मान कार्ड केवाईसी, नाम सर्च और तुरंत ओरिजिनल आयुष्मान पीवीसी कार्ड प्रिंट।", "Aadhaar Card\\nRation Card or PM-JAY letter\\nMobile Phone for OTP", "HeartPulse", "Active", "yes", "Instant verification / 24-48 Hours Approval", "Hello Balaji Communication, I want information about Ayushman Card."],
-      ["srv-voter-id", "Voter ID / पहचान पत्र Apply & Correction", "वोटर आईडी (पहचान पत्र) नया आवेदन एवं संशोधन", "Voter ID", "New voter registration (Form 6), address shift (Form 8), and digital e-EPIC download.", "18 वर्ष पूर्ण होने पर नया पहचान पत्र बनवाना, पता बदलना या डिजिटल वोटर कार्ड डाउनलोड।", "Assistance on Election Commission of India (ECI) portal to apply for fresh voter ID card.", "भारत निर्वाचन आयोग के पोर्टल पर फॉर्म 6 द्वारा नया पहचान पत्र आवेदन एवं संशोधन।", "Passport Photo\\nAge Proof\\nAddress Proof", "Vote", "Active", "yes", "15-30 Days", "Hello Balaji Communication, I want information about Voter ID application."],
-      ["srv-pan-card", "PAN Card Apply & Correction", "नया पैन कार्ड आवेदन एवं सुधार", "PAN Card", "New Instant e-PAN, minor PAN card, or correction in name/father's name.", "नया पैन कार्ड (वयस्क/नाबालिग), खोए हुए पैन को दोबारा प्राप्त करना या नाम सुधार।", "Online submission via NSDL / UTIITSL for new PAN allocation or updating details.", "NSDL / UTIITSL पोर्टल के माध्यम से नया पैन कार्ड आवेदन। 2 से 3 दिन में ई-पैन एवं स्पीड पोस्ट द्वारा घर पर ओरिजिनल कार्ड।", "Aadhaar Card\\nTwo Passport Photos", "BadgePercent", "Active", "yes", "2-3 Days e-PAN / 10-15 Days physical card", "Hello Balaji Communication, I want information about PAN Card application."],
-      ["srv-income-cert", "Income Certificate (आय प्रमाण पत्र)", "आय प्रमाण पत्र ऑनलाइन आवेदन", "Certificates", "Government issued income certificate for student scholarships, fee concession, and schemes.", "छात्रवृत्ति, स्कूल-कॉलेज प्रवेश एवं सरकारी योजनाओं हेतु अधिकृत आय प्रमाण पत्र।", "Assistance on state e-District portal for applying and downloading Tehsildar verified certificate.", "ई-डिस्ट्रिक्ट पोर्टल के माध्यम से स्वप्रमाणित घोषणा पत्र के साथ आय प्रमाण पत्र का आवेदन।", "Aadhaar Card\\nSelf-Declaration Form\\nSalary/Gram Pradhan report\\nPhoto", "FileCheck2", "Active", "yes", "7-15 Working Days", "Hello Balaji Communication, I want information about Income Certificate."],
-      ["srv-caste-cert", "Caste Certificate (जाति प्रमाण पत्र)", "जाति प्रमाण पत्र (SC / ST / OBC / EWS)", "Certificates", "Official caste certificate for competitive examinations, reservations, and state benefits.", "सरकारी नौकरियों, आरक्षण एवं उच्च शिक्षा में लाभ हेतु अधिकृत जाति प्रमाण पत्र।", "State and Central format caste certificates application with proper revenue validation.", "राज्य एवं केंद्र सरकार के प्रारूप में एससी, एसटी, ओबीसी एवं ईडब्ल्यूएस प्रमाण पत्र का ऑनलाइन आवेदन।", "Aadhaar Card\\nOld family caste proof / registry\\nSelf-Declaration\\nPhoto", "Award", "Active", "no", "7-15 Working Days", "Hello Balaji Communication, I want information about Caste Certificate."],
-      ["srv-residence-cert", "Residence / Domicile Certificate (निवास प्रमाण पत्र)", "मूल निवास प्रमाण पत्र ऑनलाइन आवेदन", "Certificates", "Valid proof of permanent residence for admissions, government jobs, and police verification.", "स्थानीय निवासी होने का कानूनी प्रमाण पत्र, जो नौकरियों एवं प्रवेश में अनिवार्य है।", "Apply for official Domicile (Niwas Praman Patra) through e-District platform.", "तहसीलदार स्तर से सत्यापित डिजिटल हस्ताक्षरित मूल निवास प्रमाण पत्र के लिए ऑनलाइन आवेदन।", "Aadhaar Card\\nElectricity Bill / Voter ID\\nPhoto", "Home", "Active", "no", "7-15 Working Days", "Hello Balaji Communication, I want information about Residence / Domicile Certificate."],
-      ["srv-birth-cert", "Birth Certificate Assistance (जन्म प्रमाण पत्र)", "जन्म प्रमाण पत्र ऑनलाइन सहायता", "Certificates", "Assistance in applying for municipal birth certificate for new-borns and delayed registrations.", "नगर निगम / ब्लॉक स्तर पर नवजात बच्चों अथवा छूटे हुए जन्म प्रमाण पत्र के लिए मार्गदर्शन।", "Civil Registration System (CRS) application filing and hospital discharge slip submission.", "सीआरएस पोर्टल पर जन्म पंजीकरण एवं अस्पताल की डिस्चार्ज स्लिप के साथ आवेदन।", "Hospital Discharge Slip\\nParents Aadhaar\\nMarriage proof", "Baby", "Active", "no", "10-21 Working Days", "Hello Balaji Communication, I want information about Birth Certificate."],
-      ["srv-online-forms", "Online Form Filling & Govt Job Applications", "सरकारी नौकरी फॉर्म एवं ऑनलाइन फॉर्म फिलिंग", "Other Digital Services", "Error-free form filling for SSC, Police, Railway, UPSC, Teaching, and college admissions.", "एसएससी, रेलवे, पुलिस, शिक्षक भर्ती, नीट, जेईई एवं अन्य प्रतियोगी परीक्षाओं के सही फॉर्म।", "Professional form submission with exact photo & signature resizing, document scanning, fee payment receipt generation.", "सटीक फोटो/हस्ताक्षर साइजिंग, योग्यता विवरण प्रविष्टि, सुरक्षित ऑनलाइन फीस भुगतान और प्रिंट आउट।", "Educational Marksheets\\nClear photo & signature\\nAadhaar Card", "FileText", "Active", "yes", "Immediate submission with receipt", "Hello Balaji Communication, I want information about Online Form Filling."],
-      ["srv-print-scan", "Print, Scan, Photocopy & Passport Photos", "प्रिंट, स्कैन, फोटोकॉपी एवं तत्काल पासपोर्ट साइज फोटो", "Other Digital Services", "High-resolution color printing, document lamination, and instant 5-minute passport photos.", "हाई-क्वालिटी रंगीन व ब्लैक-व्हाइट प्रिंट, दस्तावेज लैमिनेशन एवं 5 मिनट में पासपोर्ट फोटो।", "Walk-in facilities for high-speed laser printing from WhatsApp/Email/Pen-drive, crisp scanning to PDF.", "व्हाट्सएप, ईमेल अथवा पेनड्राइव से तुरंत प्रिंट, सभी प्रकार के कागजातों की फोटोकॉपी एवं लैमिनेशन।", "Original Document or Soft copy", "Printer", "Active", "no", "Instant Walk-in (2-5 Minutes)", "Hello Balaji Communication, I want to print or scan documents."]
-    ];
-    for (var sIdx = 0; sIdx < defaultServices.length; sIdx++) {
-      srvSheet.appendRow(defaultServices[sIdx]);
-    }
-    formatHeaderRow(srvSheet, "#1E3A8A");
-  } catch (errSrv) {
-    Logger.log("Services tab setup error: " + errSrv.toString());
-  }
-
-  // 2. ENQUIRIES TAB (Header only - clean register ready for live applications)
-  try {
-    var enqSheet = getOrCreateSheet(ss, "Enquiries");
-    if (enqSheet.getLastRow() === 0) {
-      enqSheet.appendRow([
-        "enquiry_id", "customer_name", "father_or_husband_name", "mobile", "service_name",
-        "category", "village", "address", "message", "preferred_contact", "urgency", "status", "created_at"
-      ]);
-    }
-    formatHeaderRow(enqSheet, "#065F46");
-  } catch (errEnq) {
-    Logger.log("Enquiries tab setup error: " + errEnq.toString());
-  }
-
-  // 3. PRICELIST TAB (Transparent CSC Government Fee & Kendra Rate Card)
-  try {
-    var prcSheet = getOrCreateSheet(ss, "PriceList");
-    prcSheet.clearContents();
-    prcSheet.appendRow([
-      "price_id", "service_name", "category", "government_fee", "csc_service_fee",
-      "total_fee", "processing_time", "eligibility_or_note", "status"
-    ]);
-    var defaultPrices = [
-      ["PRC-001", "Aadhaar Mobile Number Update", "Aadhaar Services", "₹50", "₹30", "₹80", "24 to 48 Hours", "UIDAI biometric update fee + Kendra verification assistance", "Active"],
-      ["PRC-002", "Income / Caste / Domicile Certificate", "Revenue & eDistrict UP", "₹15", "₹35", "₹50", "7 to 10 Days", "Official UP Govt treasury challan + online application & scanning", "Active"],
-      ["PRC-003", "New PAN Card (Physical Delivery to Home)", "NSDL / UTI Services", "₹107", "₹93", "₹200", "10 to 15 Days", "NSDL official fee + biometric e-KYC and Speed Post plastic card", "Active"],
-      ["PRC-004", "Ayushman Bharat Golden Card Print", "Health Mission", "₹0 (Govt Free)", "₹30", "₹30", "Instant 5 Mins", "Government subsidy is free; High-grade waterproof PVC print charge", "Active"],
-      ["PRC-005", "PM Kisan Samman Nidhi e-KYC", "Agriculture Services", "₹0 (Govt Free)", "₹20", "₹20", "Instant Thumb Scan", "Biometric thumb authentication machine and portal server charge", "Active"],
-      ["PRC-006", "New Ration Card Application", "Food & Civil Supplies", "₹0 (Govt Free)", "₹60", "₹60", "15 to 30 Days", "Online FCS portal filing, unit registration and document upload", "Active"],
-      ["PRC-007", "Voter ID New Registration / Correction", "Election Commission", "₹0 (Govt Free)", "₹40", "₹40", "15 to 30 Days", "Form 6 / Form 8 application filing with BLO follow-up guidance", "Active"],
-      ["PRC-008", "PVC Smart Plastic Card Print (Aadhaar / Voter / PAN)", "Digital Print Services", "₹0", "₹50", "₹50", "Instant 5 Mins", "High definition UV waterproof smart PVC plastic card printing", "Active"]
-    ];
-    for (var pIdx = 0; pIdx < defaultPrices.length; pIdx++) {
-      prcSheet.appendRow(defaultPrices[pIdx]);
-    }
-    formatHeaderRow(prcSheet, "#7C2D12");
-  } catch (errPrc) {
-    Logger.log("PriceList tab setup error: " + errPrc.toString());
-  }
-
-  // 4. NOTICE BOARD TAB (Live scheme announcements & deadlines)
-  try {
-    var ntcSheet = getOrCreateSheet(ss, "NoticeBoard");
-    ntcSheet.clearContents();
-    ntcSheet.appendRow([
-      "notice_id", "title_en", "title_hi", "description_en", "description_hi",
-      "category", "badge_type", "last_date", "action_link", "status", "created_at"
-    ]);
-    var defaultNotices = [
-      ["NTC-001", "PM Kisan 19th Installment e-KYC Mandatory", "पीएम किसान 19वीं किस्त हेतु बायोमेट्रिक ई-केवाईसी अनिवार्य", "Farmers who have not completed biometric e-KYC must visit Balaji Communication to avoid installment blockage.", "जिन किसान भाइयों की ई-केवाईसी पूरी नहीं है, वे अपनी आगामी किस्त पाने के लिए तुरंत केंद्र पर आकर फिंगरप्रिंट से ई-केवाईसी कराएं।", "PM Kisan", "Urgent", "31-03-2026", "/services", "Active", new Date().toISOString()],
-      ["NTC-002", "UP Scholarship 2026 Pre & Post Matric Applications Open", "यूपी छात्रवृत्ति 2026 दशमोत्तर एवं पूर्वदशम आवेदन प्रारंभ", "Apply online with Marksheet, Income Certificate, Caste Certificate, and Bank Passbook linked with NPCI.", "कक्षा 9, 10, 11, 12 एवं बीए, बीएससी, आईटीआई छात्रवृत्ति के नए एवं नवीनीकरण फॉर्म भरने हेतु संपर्क करें।", "Education & Scholarship", "New", "15-05-2026", "/contact", "Active", new Date().toISOString()],
-      ["NTC-003", "Free Aadhaar Document Update Extended by UIDAI", "मुफ्त आधार कार्ड दस्तावेज अपडेट सुविधा का लाभ उठाएं", "UIDAI has extended online proof of identity and address update for cards older than 10 years.", "जिनका आधार कार्ड 10 वर्ष से अधिक पुराना है, वे अपनी पहचान एवं पते का प्रमाण तुरंत अपडेट करवाएं।", "Aadhaar Alert", "Important", "30-06-2026", "/services", "Active", new Date().toISOString()]
-    ];
-    for (var nIdx = 0; nIdx < defaultNotices.length; nIdx++) {
-      ntcSheet.appendRow(defaultNotices[nIdx]);
-    }
-    formatHeaderRow(ntcSheet, "#92400E");
-  } catch (errNtc) {
-    Logger.log("NoticeBoard tab setup error: " + errNtc.toString());
-  }
-
-  // 5. QUICK LINKS TAB (Direct Official Portals Directory)
-  try {
-    var lnkSheet = getOrCreateSheet(ss, "QuickLinks");
-    lnkSheet.clearContents();
-    lnkSheet.appendRow([
-      "link_id", "portal_name", "department", "category", "portal_url",
-      "description", "status", "is_featured"
-    ]);
-    var defaultLinks = [
-      ["LNK-001", "UIDAI MyAadhaar Portal", "Govt of India (UIDAI)", "Aadhaar", "https://myaadhaar.uidai.gov.in/", "Official UIDAI portal for Aadhaar download, PVC order, document update and status check.", "Active", "yes"],
-      ["LNK-002", "e-District Uttar Pradesh Portal", "Govt of UP", "Certificates", "https://edistrict.up.gov.in/", "Official portal for Income, Caste, Domicile certificates and revenue services in UP.", "Active", "yes"],
-      ["LNK-003", "PM-KISAN Samman Nidhi Portal", "Ministry of Agriculture", "Agriculture", "https://pmkisan.gov.in/", "Direct portal for PM Kisan farmer registration, beneficiary status and Aadhaar OTP eKYC.", "Active", "yes"],
-      ["LNK-004", "National Voter Services Portal (ECI)", "Election Commission of India", "Voter ID", "https://voters.eci.gov.in/", "Online portal for Form 6 voter card apply, shifting, EPIC download, and BLO tracking.", "Active", "yes"],
-      ["LNK-005", "NSDL Online PAN Application", "Income Tax Dept / Protean", "PAN Card", "https://www.onlineservices.nsdl.com/paam/endUserRegisterContact.html", "Official NSDL paperless PAN card application and reprint portal.", "Active", "yes"],
-      ["LNK-006", "PM-JAY Ayushman Bharat Beneficiary Portal", "National Health Authority", "Health Mission", "https://beneficiary.nha.gov.in/", "Official NHA portal to check family eligibility and download Ayushman Golden Card.", "Active", "yes"],
-      ["LNK-007", "UP FCS Ration Card Portal (nfsa.up.gov.in)", "Food & Civil Supplies UP", "Ration Card", "https://fcs.up.gov.in/", "UP Ration Card eligibility list, unit search, and supply quota checking portal.", "Active", "yes"],
-      ["LNK-008", "UP Bhulekh (Land Records & Khatauni)", "Revenue Council UP", "Land Records", "https://upbhulekh.gov.in/", "Search official certified Khatauni land records by Gata/Khasra number across UP.", "Active", "yes"]
-    ];
-    for (var lIdx = 0; lIdx < defaultLinks.length; lIdx++) {
-      lnkSheet.appendRow(defaultLinks[lIdx]);
-    }
-    formatHeaderRow(lnkSheet, "#0F766E");
-  } catch (errLnk) {
-    Logger.log("QuickLinks tab setup error: " + errLnk.toString());
-  }
-
-  // 6. CITIZENS REGISTRY TAB (Clean Beneficiary Registry)
-  try {
-    var citSheet = getOrCreateSheet(ss, "Citizens");
-    if (citSheet.getLastRow() === 0) {
-      citSheet.appendRow([
-        "citizen_id", "full_name", "father_name", "mobile", "aadhaar_last4",
-        "village", "address", "services_availed", "notes", "status", "created_at"
-      ]);
-    }
-    formatHeaderRow(citSheet, "#4C1D95");
-  } catch (errCit) {
-    Logger.log("Citizens tab setup error: " + errCit.toString());
-  }
-
-  // 7. SETTINGS TAB (Balaji Communication Center Metadata)
-  try {
-    var setSheet = getOrCreateSheet(ss, "Settings");
-    setSheet.clearContents();
-    setSheet.appendRow(["Key", "Value"]);
-    var defaultSettings = [
-      ["center_name_en", "Balaji Communication & Jan Seva Kendra"],
-      ["center_name_hi", "बालाजी कम्युनिकेशन एवं जन सेवा केंद्र"],
-      ["operator_name", "Jitin Kumar Gangwar"],
-      ["phone", "9058913913"],
-      ["whatsapp", "9058913913"],
-      ["email", "balajicommunicationgaini@gmail.com"],
-      ["csc_id", "CSC-UP-243505-001"],
-      ["address_en", "Main Market Gaini, Near Primary School, Bareilly, Uttar Pradesh - 243505"],
-      ["address_hi", "मुख्य बाजार गैनी, प्राथमिक विद्यालय के पास, बरेली, उत्तर प्रदेश - 243505"],
-      ["working_hours_en", "Monday to Saturday: 8:00 AM - 8:00 PM | Sunday: 9:00 AM - 5:00 PM"],
-      ["google_map_link", "https://maps.google.com/?q=Gaini+Bareilly+Uttar+Pradesh"],
-      ["last_synced_at", new Date().toISOString()]
-    ];
-    for (var sIdx2 = 0; sIdx2 < defaultSettings.length; sIdx2++) {
-      setSheet.appendRow(defaultSettings[sIdx2]);
-    }
-    formatHeaderRow(setSheet, "#374151");
-  } catch (errSet) {
-    Logger.log("Settings tab setup error: " + errSet.toString());
-  }
-
-  // Clean up blank default "Sheet1" if present
-  try {
-    var defaultSheet = ss.getSheetByName("Sheet1") || ss.getSheetByName("शीट1") || ss.getSheetByName("Sheet 1");
-    if (defaultSheet && ss.getSheets().length > 1 && defaultSheet.getLastRow() === 0) {
-      ss.deleteSheet(defaultSheet);
-    }
-  } catch (eClean) {}
-
-  SpreadsheetApp.flush();
-  Logger.log("Master Setup Complete! All 7 tabs successfully initialized.");
-  return { status: "success", message: "Setup completed successfully" };
-}
-
-function getOrCreateSheet(ss, name) {
-  var sheet = ss.getSheetByName(name);
   if (!sheet) {
-    sheet = ss.insertSheet(name);
+    sheet = ss.insertSheet(SHEET_NAME, 0);
   }
-  return sheet;
+
+  // Set headers
+  var headerRange = sheet.getRange(1, 1, 1, HEADERS.length);
+  headerRange.setValues([HEADERS]);
+  headerRange.setBackground("#1e3a8a"); // Navy Blue
+  headerRange.setFontColor("#ffffff");
+  headerRange.setFontWeight("bold");
+  headerRange.setFontSize(10);
+  headerRange.setHorizontalAlignment("center");
+  sheet.setFrozenRows(1);
+
+  // Auto-resize columns
+  for (var i = 1; i <= HEADERS.length; i++) {
+    sheet.setColumnWidth(i, i === 1 ? 160 : i === 2 ? 180 : i === 3 ? 180 : i === 5 ? 130 : i === 6 ? 220 : i === 10 ? 250 : 140);
+  }
+
+  Logger.log("Enquiries sheet setup complete! Headers: " + HEADERS.join(", "));
+  return "Success: Enquiries sheet created and formatted!";
 }
 
-function formatHeaderRow(sheet, bgColor) {
-  try {
-    var lastCol = sheet.getLastColumn();
-    if (!lastCol || lastCol < 1) lastCol = 10;
-    var maxCol = sheet.getMaxColumns();
-    if (lastCol > maxCol) {
-      sheet.insertColumnsAfter(maxCol, lastCol - maxCol);
-    }
-    var range = sheet.getRange(1, 1, 1, lastCol);
-    range.setBackground(bgColor);
-    range.setFontColor("#FFFFFF");
-    range.setFontWeight("bold");
-    if (sheet.getMaxRows() > 1) {
-      sheet.setFrozenRows(1);
-    }
-  } catch (err) {
-    Logger.log("formatHeaderRow notice: " + err.toString());
-  }
-}
-
-// =========================================================================
-// 2. HTTP GET DISPATCHER (doGet) - BROWSER & API ACCESS
-// =========================================================================
-function doGet(e) {
-  var result = { status: "error", message: "Invalid action" };
-  
-  try {
-    var action = (e && e.parameter && e.parameter.action) ? String(e.parameter.action).trim() : "getAllData";
-    var callback = (e && e.parameter && e.parameter.callback) ? String(e.parameter.callback).trim() : "";
-    
-    if (action === "getAllData" || action === "all" || action === "") {
-      result = {
-        status: "success",
-        message: "Balaji Google Apps Script Backend is Live!",
-        data: {
-          services: getServicesList(),
-          enquiries: getEnquiriesList(),
-          priceList: getPriceListData(),
-          notices: getNoticesData(),
-          quickLinks: getQuickLinksData(),
-          citizens: getCitizensData(),
-          settings: getSettingsData()
-        }
-      };
-    } else if (action === "getServices" || action === "services") {
-      result = { status: "success", data: getServicesList() };
-    } else if (action === "getEnquiries" || action === "enquiries") {
-      result = { status: "success", data: getEnquiriesList() };
-    } else if (action === "getPriceList" || action === "pricelist") {
-      result = { status: "success", data: getPriceListData() };
-    } else if (action === "getNotices" || action === "notices") {
-      result = { status: "success", data: getNoticesData() };
-    } else if (action === "getQuickLinks" || action === "quicklinks") {
-      result = { status: "success", data: getQuickLinksData() };
-    } else if (action === "getCitizens" || action === "citizens") {
-      result = { status: "success", data: getCitizensData() };
-    } else if (action === "getSettings" || action === "settings") {
-      result = { status: "success", data: getSettingsData() };
-    } else if (action === "setup") {
-      result = setupAllTemplateSheets();
-    } else if (action === "createService" || action === "addService") {
-      var sData = extractServiceDataFromParams(e);
-      result = addService(sData);
-    } else if (action === "updateService") {
-      var uData = extractServiceDataFromParams(e);
-      result = updateService(uData);
-    } else if (action === "deleteService") {
-      var delId = (e && e.parameter && (e.parameter.service_id || e.parameter.id)) ? String(e.parameter.service_id || e.parameter.id) : "";
-      result = deleteService(delId);
-    } else if (action === "createEnquiry" || action === "addEnquiry") {
-      var enqData = extractEnquiryDataFromParams(e);
-      result = addEnquiry(enqData || {});
-    } else if (action === "updateEnquiryStatus") {
-      var enqId = (e && e.parameter && (e.parameter.enquiry_id || e.parameter.id)) ? String(e.parameter.enquiry_id || e.parameter.id) : "";
-      var status = (e && e.parameter && e.parameter.status) ? String(e.parameter.status) : "New";
-      result = updateEnquiryStatus(enqId, status);
-    } else if (action === "deleteEnquiry") {
-      var dEnqId = (e && e.parameter && (e.parameter.enquiry_id || e.parameter.id)) ? String(e.parameter.enquiry_id || e.parameter.id) : "";
-      result = deleteEnquiry(dEnqId);
-    } else if (action === "clearEnquiries") {
-      result = clearAllEnquiriesSheet();
-    } else if (action === "ping" || action === "status") {
-      result = {
-        status: "success",
-        message: "Google Apps Script Web App is connected and responding correctly!",
-        timestamp: new Date().toISOString()
-      };
-    } else {
-      result = { status: "error", message: "Unknown action: " + action };
-    }
-  } catch (err) {
-    result = { 
-      status: "error", 
-      message: err.toString(),
-      hint: "Make sure you opened Apps Script via Extensions > Apps Script in your spreadsheet."
-    };
-  }
-  
-  var jsonOutput = JSON.stringify(result);
-  if (callback) {
-    return ContentService.createTextOutput(callback + "(" + jsonOutput + ")")
-      .setMimeType(ContentService.MimeType.JAVASCRIPT);
-  }
-  return ContentService.createTextOutput(jsonOutput)
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-// Helper to extract service data from GET parameter
-function extractServiceDataFromParams(e) {
-  var sData = null;
-  if (e && e.parameter && e.parameter.data) {
-    try { sData = JSON.parse(e.parameter.data); } catch (err) {}
-  }
-  if (!sData && e && e.parameter) {
-    sData = {
-      service_id: e.parameter.service_id || e.parameter.id,
-      service_name_en: e.parameter.service_name_en || e.parameter.name_en || e.parameter.name,
-      service_name_hi: e.parameter.service_name_hi || e.parameter.name_hi,
-      category: e.parameter.category || "General Services",
-      short_description_en: e.parameter.short_description_en,
-      short_description_hi: e.parameter.short_description_hi,
-      full_description_en: e.parameter.full_description_en,
-      full_description_hi: e.parameter.full_description_hi,
-      required_documents: e.parameter.required_documents,
-      icon: e.parameter.icon || "FileText",
-      status: e.parameter.status || "Active",
-      popular: e.parameter.popular === "yes" || e.parameter.popular === "true" || e.parameter.popular === true,
-      estimated_time: e.parameter.estimated_time || "1 to 3 Working Days",
-      whatsapp_message: e.parameter.whatsapp_message
-    };
-  }
-  return sData || {};
-}
-
-// Helper to extract enquiry data from GET parameter
-function extractEnquiryDataFromParams(e) {
-  var enquiryData = null;
-  if (e && e.parameter && e.parameter.data) {
-    try { enquiryData = JSON.parse(e.parameter.data); } catch (pe) {}
-  }
-  if (!enquiryData && e && e.parameter) {
-    enquiryData = {
-      enquiry_id: e.parameter.enquiry_id || e.parameter.id,
-      customer_name: e.parameter.customer_name || e.parameter.applicant_name || e.parameter.name,
-      applicant_name: e.parameter.applicant_name || e.parameter.customer_name || e.parameter.name,
-      father_or_husband_name: e.parameter.father_or_husband_name || e.parameter.father_name,
-      mobile: e.parameter.mobile || e.parameter.phone,
-      service_name: e.parameter.service_name || e.parameter.service,
-      category: e.parameter.category,
-      village: e.parameter.village,
-      address: e.parameter.address,
-      message: e.parameter.message,
-      preferred_contact: e.parameter.preferred_contact || "Call",
-      urgency: e.parameter.urgency || "Normal",
-      status: e.parameter.status || "New"
-    };
-  }
-  return enquiryData || {};
-}
-
-// =========================================================================
-// 3. HTTP POST DISPATCHER (doPost)
-// =========================================================================
+/**
+ * Handles incoming POST requests (no-cors JSON and text/plain)
+ */
 function doPost(e) {
-  var result = { status: "error", message: "No data received" };
-  
   try {
+    var contents = e && e.postData && e.postData.contents ? e.postData.contents : "";
     var payload = {};
-    if (e && e.postData && e.postData.contents) {
+
+    if (contents) {
       try {
-        payload = JSON.parse(e.postData.contents);
-      } catch (pe) {
-        if (e.parameter) {
-          payload = e.parameter;
-        }
+        payload = JSON.parse(contents);
+      } catch (err) {
+        payload = e.parameter || {};
       }
     } else if (e && e.parameter) {
       payload = e.parameter;
     }
-    
-    var action = payload.action || (e && e.parameter && e.parameter.action);
-    
-    if (action === "createEnquiry" || action === "addEnquiry") {
-      result = addEnquiry(payload.data || payload);
-    } else if (action === "createService" || action === "addService") {
-      result = addService(payload.data || payload);
-    } else if (action === "updateService") {
-      result = updateService(payload.data || payload);
-    } else if (action === "deleteService") {
-      var sId = payload.service_id || payload.id || (payload.data && (payload.data.service_id || payload.data.id));
-      result = deleteService(sId);
+
+    var action = payload.action || (e && e.parameter && e.parameter.action) || "createEnquiry";
+    var data = payload.data || payload;
+
+    if (action === "createEnquiry" || !action) {
+      return handleSaveEnquiry(data);
     } else if (action === "updateEnquiryStatus") {
-      result = updateEnquiryStatus(payload.enquiry_id || payload.id, payload.status);
-    } else if (action === "deleteEnquiry") {
-      var enqId = payload.enquiry_id || payload.id || (payload.data && (payload.data.enquiry_id || payload.data.id));
-      result = deleteEnquiry(enqId);
-    } else if (action === "clearEnquiries") {
-      result = clearAllEnquiriesSheet();
-    } else if (action === "savePriceList") {
-      result = savePriceListItem(payload.data || payload);
-    } else if (action === "saveNotice") {
-      result = saveNoticeItem(payload.data || payload);
-    } else if (action === "saveCitizen") {
-      result = saveCitizenItem(payload.data || payload);
-    } else if (action === "updateSettings") {
-      result = saveSettingsData(payload.data || payload);
-    } else if (action === "setup") {
-      result = setupAllTemplateSheets();
-    } else if (action === "ping" || action === "status") {
-      result = { status: "success", message: "Google Apps Script POST connected!", timestamp: new Date().toISOString() };
-    } else {
-      result = { status: "error", message: "Unknown POST action: " + action };
+      return handleUpdateStatus(payload);
     }
-  } catch (err) {
-    result = { status: "error", message: err.toString() };
+
+    return createJsonResponse({ status: "success", message: "Action received" });
+  } catch (error) {
+    return createJsonResponse({ status: "error", message: error.toString() });
   }
-  
-  return ContentService.createTextOutput(JSON.stringify(result))
+}
+
+/**
+ * Handles incoming GET requests (query params, fallback beacons, test checks)
+ */
+function doGet(e) {
+  try {
+    var params = (e && e.parameter) ? e.parameter : {};
+    var action = params.action || "";
+
+    if (action === "createEnquiry" || params.customer_name || params.applicant_name || params.mobile) {
+      return handleSaveEnquiry(params);
+    } else if (action === "updateEnquiryStatus") {
+      return handleUpdateStatus(params);
+    } else if (action === "ping") {
+      return createJsonResponse({
+        status: "success",
+        message: "Balaji Communication Enquiries Google Sheet Web App is active!",
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    return createJsonResponse({
+      status: "success",
+      message: "Balaji Communication Enquiries Web App is running. All citizen applications submitted on the website will be appended to the 'Enquiries' sheet.",
+      sheet: SHEET_NAME
+    });
+  } catch (error) {
+    return createJsonResponse({ status: "error", message: error.toString() });
+  }
+}
+
+/**
+ * Appends a citizen application / enquiry row to the "Enquiries" sheet
+ */
+function handleSaveEnquiry(item) {
+  var ss = getSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_NAME);
+
+  if (!sheet) {
+    setupEnquiriesSheet();
+    sheet = ss.getSheetByName(SHEET_NAME);
+  }
+
+  var now = new Date();
+  var formattedTime = Utilities.formatDate(now, Session.getScriptTimeZone() || "Asia/Kolkata", "dd/MM/yyyy hh:mm:ss a");
+
+  var refId = item.enquiry_id || ("BALAJI-APP-" + now.getTime().toString(36).toUpperCase());
+  var citizenName = item.customer_name || item.applicant_name || "";
+  var fatherHusband = item.father_or_husband_name || "";
+  var mobile = item.mobile || "";
+  var serviceName = item.service_name || "";
+  var category = item.category || "General";
+  var village = item.village || "";
+  var address = item.address || "";
+  var message = item.message || "";
+  var preferredContact = item.preferred_contact || "Call";
+  var urgency = item.urgency || "Normal";
+  var status = item.status || "New";
+
+  var row = [
+    formattedTime,
+    refId,
+    citizenName,
+    fatherHusband,
+    "'" + mobile, // apostrophe prevents leading zeroes from dropping in Excel/Sheets
+    serviceName,
+    category,
+    village,
+    address,
+    message,
+    preferredContact,
+    urgency,
+    status
+  ];
+
+  // DEDUPLICATION: Verify if this Reference ID was already recorded in Column 2 (Reference ID)
+  var existingLastRow = sheet.getLastRow();
+  if (existingLastRow > 1) {
+    var idValues = sheet.getRange(2, 2, existingLastRow - 1, 1).getValues();
+    for (var r = 0; r < idValues.length; r++) {
+      if (idValues[r][0] && String(idValues[r][0]).trim() === String(refId).trim()) {
+        Logger.log("Duplicate enquiry skipped: " + refId);
+        return createJsonResponse({
+          status: "success",
+          message: "Enquiry already recorded (duplicate prevented)",
+          reference_id: refId
+        });
+      }
+    }
+  }
+
+  sheet.appendRow(row);
+
+  // Format the newly appended row
+  var lastRow = sheet.getLastRow();
+  var range = sheet.getRange(lastRow, 1, 1, row.length);
+  range.setFontSize(9);
+  range.setVerticalAlignment("middle");
+  if (lastRow % 2 === 0) {
+    range.setBackground("#f8fafc");
+  }
+
+  // Highlight status cell
+  var statusCell = sheet.getRange(lastRow, 13);
+  statusCell.setFontWeight("bold");
+  statusCell.setHorizontalAlignment("center");
+  if (status === "New") {
+    statusCell.setBackground("#dbeafe");
+    statusCell.setFontColor("#1e40af");
+  }
+
+  return createJsonResponse({
+    status: "success",
+    message: "Citizen enquiry successfully stored in Google Sheet",
+    enquiry_id: refId,
+    row: lastRow
+  });
+}
+
+/**
+ * Updates application status in the "Enquiries" sheet
+ */
+function handleUpdateStatus(params) {
+  var ss = getSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) return createJsonResponse({ status: "error", message: "Enquiries sheet not found" });
+
+  var targetId = params.enquiry_id || params.id;
+  var newStatus = params.status || "In Progress";
+  if (!targetId) return createJsonResponse({ status: "error", message: "Missing enquiry_id" });
+
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][1] == targetId) {
+      sheet.getRange(i + 1, 13).setValue(newStatus);
+      return createJsonResponse({ status: "success", message: "Status updated to " + newStatus });
+    }
+  }
+
+  return createJsonResponse({ status: "error", message: "Enquiry ID not found in sheet" });
+}
+
+function createJsonResponse(data) {
+  return ContentService.createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
-}
-
-// =========================================================================
-// 4. READ DATA FUNCTIONS
-// =========================================================================
-function getServicesList() {
-  var ss = getSpreadsheet();
-  var sheet = ss.getSheetByName("Services");
-  if (!sheet) {
-    try {
-      setupAllTemplateSheets();
-      sheet = ss.getSheetByName("Services");
-    } catch (e) {}
-  }
-  if (!sheet) return [];
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return [];
-  
-  var services = [];
-  for (var i = 1; i < data.length; i++) {
-    var r = data[i];
-    if (!r[1] && !r[2]) continue;
-    services.push({
-      service_id: String(r[0] || ("srv-" + i)),
-      service_name_en: String(r[1] || r[2] || ""),
-      service_name_hi: String(r[2] || r[1] || ""),
-      category: String(r[3] || "General Services"),
-      short_description_en: String(r[4] || ""),
-      short_description_hi: String(r[5] || ""),
-      full_description_en: String(r[6] || ""),
-      full_description_hi: String(r[7] || ""),
-      required_documents: r[8] ? String(r[8]).split(/[\\n;]+/).map(function(s){return s.trim();}).filter(Boolean) : [],
-      icon: String(r[9] || "FileText"),
-      status: String(r[10] || "Active"),
-      popular: r[11] === true || String(r[11]).toLowerCase() === "yes" || String(r[11]).toLowerCase() === "true",
-      estimated_time: String(r[12] || "1 to 3 Working Days"),
-      whatsapp_message: String(r[13] || "")
-    });
-  }
-  return services;
-}
-
-function getEnquiriesList() {
-  var ss = getSpreadsheet();
-  var sheet = ss.getSheetByName("Enquiries");
-  if (!sheet) return [];
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return [];
-  var list = [];
-  for (var i = 1; i < data.length; i++) {
-    var r = data[i];
-    if (!r[1]) continue;
-    list.push({
-      enquiry_id: String(r[0] || ("ENQ-" + i)),
-      customer_name: String(r[1] || ""),
-      father_or_husband_name: String(r[2] || ""),
-      mobile: String(r[3] || ""),
-      service_name: String(r[4] || ""),
-      category: String(r[5] || ""),
-      village: String(r[6] || ""),
-      address: String(r[7] || ""),
-      message: String(r[8] || ""),
-      preferred_contact: String(r[9] || "Call"),
-      urgency: String(r[10] || "Normal"),
-      status: String(r[11] || "New"),
-      created_at: String(r[12] || new Date().toISOString())
-    });
-  }
-  return list;
-}
-
-function getPriceListData() {
-  var ss = getSpreadsheet();
-  var sheet = ss.getSheetByName("PriceList");
-  if (!sheet) return [];
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return [];
-  var list = [];
-  for (var i = 1; i < data.length; i++) {
-    var r = data[i];
-    if (!r[1]) continue;
-    list.push({
-      price_id: String(r[0] || ("PRC-" + i)),
-      service_name: String(r[1] || ""),
-      category: String(r[2] || "General"),
-      government_fee: String(r[3] || "₹0"),
-      csc_service_fee: String(r[4] || "₹0"),
-      total_fee: String(r[5] || "₹0"),
-      processing_time: String(r[6] || "1-3 Days"),
-      eligibility_or_note: String(r[7] || ""),
-      status: String(r[8] || "Active")
-    });
-  }
-  return list;
-}
-
-function getNoticesData() {
-  var ss = getSpreadsheet();
-  var sheet = ss.getSheetByName("NoticeBoard");
-  if (!sheet) return [];
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return [];
-  var list = [];
-  for (var i = 1; i < data.length; i++) {
-    var r = data[i];
-    if (!r[1] && !r[2]) continue;
-    list.push({
-      notice_id: String(r[0] || ("NTC-" + i)),
-      title_en: String(r[1] || ""),
-      title_hi: String(r[2] || ""),
-      description_en: String(r[3] || ""),
-      description_hi: String(r[4] || ""),
-      category: String(r[5] || "General"),
-      badge_type: String(r[6] || "Important"),
-      last_date: String(r[7] || ""),
-      action_link: String(r[8] || "/services"),
-      status: String(r[9] || "Active"),
-      created_at: String(r[10] || new Date().toISOString())
-    });
-  }
-  return list;
-}
-
-function getQuickLinksData() {
-  var ss = getSpreadsheet();
-  var sheet = ss.getSheetByName("QuickLinks");
-  if (!sheet) return [];
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return [];
-  var list = [];
-  for (var i = 1; i < data.length; i++) {
-    var r = data[i];
-    if (!r[1]) continue;
-    list.push({
-      link_id: String(r[0] || ("LNK-" + i)),
-      portal_name: String(r[1] || ""),
-      department: String(r[2] || ""),
-      category: String(r[3] || "General"),
-      portal_url: String(r[4] || "#"),
-      description: String(r[5] || ""),
-      status: String(r[6] || "Active"),
-      is_featured: r[7] === true || String(r[7]).toLowerCase() === "yes"
-    });
-  }
-  return list;
-}
-
-function getCitizensData() {
-  var ss = getSpreadsheet();
-  var sheet = ss.getSheetByName("Citizens");
-  if (!sheet) return [];
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return [];
-  var list = [];
-  for (var i = 1; i < data.length; i++) {
-    var r = data[i];
-    if (!r[1]) continue;
-    list.push({
-      citizen_id: String(r[0] || ("CIT-" + i)),
-      full_name: String(r[1] || ""),
-      father_name: String(r[2] || ""),
-      mobile: String(r[3] || ""),
-      aadhaar_last4: String(r[4] || ""),
-      village: String(r[5] || ""),
-      address: String(r[6] || ""),
-      services_availed: String(r[7] || ""),
-      notes: String(r[8] || ""),
-      status: String(r[9] || "Active"),
-      created_at: String(r[10] || new Date().toISOString())
-    });
-  }
-  return list;
-}
-
-function getSettingsData() {
-  var ss = getSpreadsheet();
-  var sheet = ss.getSheetByName("Settings");
-  if (!sheet) return {};
-  var data = sheet.getDataRange().getValues();
-  var settings = {};
-  for (var i = 1; i < data.length; i++) {
-    var key = String(data[i][0]);
-    var val = String(data[i][1]);
-    if (key) settings[key] = val;
-  }
-  return settings;
-}
-
-// =========================================================================
-// 5. WRITE, UPSERT & DELETE FUNCTIONS
-// =========================================================================
-function addEnquiry(data) {
-  var ss = getSpreadsheet();
-  var sheet = getOrCreateSheet(ss, "Enquiries");
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow([
-      "enquiry_id", "customer_name", "father_or_husband_name", "mobile", "service_name",
-      "category", "village", "address", "message", "preferred_contact", "urgency", "status", "created_at"
-    ]);
-    formatHeaderRow(sheet, "#065F46");
-  }
-  var id = data.enquiry_id || ("ENQ-" + Utilities.getUuid().substring(0, 8).toUpperCase());
-  
-  // Deduplication check: Avoid inserting identical enquiry twice
-  var lastRow = sheet.getLastRow();
-  if (lastRow > 1) {
-    var existingIds = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-    for (var i = 0; i < existingIds.length; i++) {
-      if (String(existingIds[i][0]).trim().toUpperCase() === String(id).trim().toUpperCase()) {
-        return { status: "success", enquiry_id: id, message: "Enquiry already recorded" };
-      }
-    }
-  }
-
-  var createdAt = data.created_at || new Date().toISOString();
-  sheet.appendRow([
-    id,
-    data.customer_name || data.applicant_name || "",
-    data.father_or_husband_name || "",
-    data.mobile || "",
-    data.service_name || "",
-    data.category || "",
-    data.village || "",
-    data.address || "",
-    data.message || "",
-    data.preferred_contact || "Call",
-    data.urgency || "Normal",
-    data.status || "New",
-    createdAt
-  ]);
-  SpreadsheetApp.flush();
-  return { status: "success", enquiry_id: id };
-}
-
-function addService(service) {
-  if (!service) return { status: "error", message: "No service data provided" };
-  var ss = getSpreadsheet();
-  var sheet = getOrCreateSheet(ss, "Services");
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow([
-      "service_id", "service_name_en", "service_name_hi", "category",
-      "short_description_en", "short_description_hi", "full_description_en", "full_description_hi",
-      "required_documents", "icon", "status", "popular", "estimated_time", "whatsapp_message"
-    ]);
-    formatHeaderRow(sheet, "#1E3A8A");
-  }
-  var id = service.service_id || service.id || ("srv-" + Utilities.getUuid().substring(0, 8));
-  var docsStr = Array.isArray(service.required_documents) ? service.required_documents.join("\\n") : (service.required_documents || "");
-
-  // Upsert check: If row exists with same service_id, update it
-  var lastRow = sheet.getLastRow();
-  if (lastRow > 1) {
-    var existingIds = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-    for (var i = 0; i < existingIds.length; i++) {
-      if (String(existingIds[i][0]).trim().toUpperCase() === String(id).trim().toUpperCase()) {
-        var row = i + 2;
-        if (service.service_name_en !== undefined) sheet.getRange(row, 2).setValue(service.service_name_en);
-        if (service.service_name_hi !== undefined) sheet.getRange(row, 3).setValue(service.service_name_hi);
-        if (service.category !== undefined) sheet.getRange(row, 4).setValue(service.category);
-        if (service.short_description_en !== undefined) sheet.getRange(row, 5).setValue(service.short_description_en);
-        if (service.short_description_hi !== undefined) sheet.getRange(row, 6).setValue(service.short_description_hi);
-        if (service.full_description_en !== undefined) sheet.getRange(row, 7).setValue(service.full_description_en);
-        if (service.full_description_hi !== undefined) sheet.getRange(row, 8).setValue(service.full_description_hi);
-        if (service.required_documents !== undefined) sheet.getRange(row, 9).setValue(docsStr);
-        if (service.icon !== undefined) sheet.getRange(row, 10).setValue(service.icon);
-        if (service.status !== undefined) sheet.getRange(row, 11).setValue(service.status);
-        if (service.popular !== undefined) sheet.getRange(row, 12).setValue(service.popular ? "yes" : "no");
-        if (service.estimated_time !== undefined) sheet.getRange(row, 13).setValue(service.estimated_time);
-        if (service.whatsapp_message !== undefined) sheet.getRange(row, 14).setValue(service.whatsapp_message);
-        SpreadsheetApp.flush();
-        return { status: "success", service_id: id, updated: true };
-      }
-    }
-  }
-
-  sheet.appendRow([
-    id,
-    service.service_name_en || service.service_name_hi || "New Service",
-    service.service_name_hi || service.service_name_en || "नई सेवा",
-    service.category || "General Services",
-    service.short_description_en || "",
-    service.short_description_hi || "",
-    service.full_description_en || "",
-    service.full_description_hi || "",
-    docsStr,
-    service.icon || "FileText",
-    service.status || "Active",
-    service.popular ? "yes" : "no",
-    service.estimated_time || "1 to 3 Working Days",
-    service.whatsapp_message || ""
-  ]);
-  SpreadsheetApp.flush();
-  return { status: "success", service_id: id };
-}
-
-function updateService(service) {
-  if (!service) return { status: "error", message: "No service data provided" };
-  var id = service.service_id || service.id;
-  if (!id) return { status: "error", message: "Missing service_id in update payload" };
-
-  var ss = getSpreadsheet();
-  var sheet = ss.getSheetByName("Services");
-  if (!sheet) {
-    return addService(service);
-  }
-  var data = sheet.getDataRange().getValues();
-  var targetId = String(id).trim().toUpperCase();
-
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim().toUpperCase() === targetId) {
-      var row = i + 1;
-      var docsStr = Array.isArray(service.required_documents) ? service.required_documents.join("\\n") : service.required_documents;
-      if (service.service_name_en !== undefined) sheet.getRange(row, 2).setValue(service.service_name_en);
-      if (service.service_name_hi !== undefined) sheet.getRange(row, 3).setValue(service.service_name_hi);
-      if (service.category !== undefined) sheet.getRange(row, 4).setValue(service.category);
-      if (service.short_description_en !== undefined) sheet.getRange(row, 5).setValue(service.short_description_en);
-      if (service.short_description_hi !== undefined) sheet.getRange(row, 6).setValue(service.short_description_hi);
-      if (service.full_description_en !== undefined) sheet.getRange(row, 7).setValue(service.full_description_en);
-      if (service.full_description_hi !== undefined) sheet.getRange(row, 8).setValue(service.full_description_hi);
-      if (docsStr !== undefined) sheet.getRange(row, 9).setValue(docsStr);
-      if (service.icon !== undefined) sheet.getRange(row, 10).setValue(service.icon);
-      if (service.status !== undefined) sheet.getRange(row, 11).setValue(service.status);
-      if (service.popular !== undefined) sheet.getRange(row, 12).setValue(service.popular ? "yes" : "no");
-      if (service.estimated_time !== undefined) sheet.getRange(row, 13).setValue(service.estimated_time);
-      if (service.whatsapp_message !== undefined) sheet.getRange(row, 14).setValue(service.whatsapp_message);
-      SpreadsheetApp.flush();
-      return { status: "success", service_id: id, updated: true };
-    }
-  }
-
-  // If service was not found in sheet, upsert (create) it automatically!
-  return addService(service);
-}
-
-function deleteService(serviceId) {
-  if (typeof serviceId === "object" && serviceId !== null) {
-    serviceId = serviceId.service_id || serviceId.id;
-  }
-  if (!serviceId) return { status: "error", message: "Missing service_id for deletion" };
-
-  var ss = getSpreadsheet();
-  var sheet = ss.getSheetByName("Services");
-  if (!sheet) return { status: "error", message: "Services sheet not found" };
-
-  var data = sheet.getDataRange().getValues();
-  var targetId = String(serviceId).trim().toUpperCase();
-
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim().toUpperCase() === targetId) {
-      sheet.deleteRow(i + 1);
-      SpreadsheetApp.flush();
-      return { status: "success", service_id: serviceId, deleted: true };
-    }
-  }
-  // Idempotent: if already deleted or absent, return success
-  return { status: "success", service_id: serviceId, deleted: true, note: "Already absent from sheet" };
-}
-
-function updateEnquiryStatus(enquiryId, newStatus) {
-  if (!enquiryId) return { status: "error", message: "Missing enquiry_id" };
-  var ss = getSpreadsheet();
-  var sheet = ss.getSheetByName("Enquiries");
-  if (!sheet) return { status: "error", message: "Enquiries sheet not found" };
-
-  var data = sheet.getDataRange().getValues();
-  var targetId = String(enquiryId).trim().toUpperCase();
-
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim().toUpperCase() === targetId) {
-      sheet.getRange(i + 1, 12).setValue(newStatus);
-      SpreadsheetApp.flush();
-      return { status: "success", enquiry_id: enquiryId, status: newStatus };
-    }
-  }
-  return { status: "error", message: "Enquiry ID not found: " + enquiryId };
-}
-
-function deleteEnquiry(enquiryId) {
-  if (typeof enquiryId === "object" && enquiryId !== null) {
-    enquiryId = enquiryId.enquiry_id || enquiryId.id;
-  }
-  if (!enquiryId) return { status: "error", message: "Missing enquiry_id" };
-
-  var ss = getSpreadsheet();
-  var sheet = ss.getSheetByName("Enquiries");
-  if (!sheet) return { status: "error", message: "Enquiries sheet not found" };
-
-  var data = sheet.getDataRange().getValues();
-  var targetId = String(enquiryId).trim().toUpperCase();
-
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim().toUpperCase() === targetId) {
-      sheet.deleteRow(i + 1);
-      SpreadsheetApp.flush();
-      return { status: "success", enquiry_id: enquiryId, deleted: true };
-    }
-  }
-  return { status: "success", enquiry_id: enquiryId, deleted: true, note: "Already absent" };
-}
-
-function clearAllEnquiriesSheet() {
-  var ss = getSpreadsheet();
-  var sheet = ss.getSheetByName("Enquiries");
-  if (!sheet) return { status: "error", message: "Enquiries sheet not found" };
-  var lastRow = sheet.getLastRow();
-  if (lastRow > 1) {
-    sheet.deleteRows(2, lastRow - 1);
-  }
-  SpreadsheetApp.flush();
-  return { status: "success", message: "All enquiries cleared successfully" };
-}
-
-function savePriceListItem(item) {
-  var ss = getSpreadsheet();
-  var sheet = getOrCreateSheet(ss, "PriceList");
-  var id = item.price_id || ("PRC-" + Utilities.getUuid().substring(0, 6).toUpperCase());
-  sheet.appendRow([
-    id,
-    item.service_name || "",
-    item.category || "General",
-    item.government_fee || "₹0",
-    item.csc_service_fee || item.center_fee || "₹0",
-    item.total_fee || "₹0",
-    item.processing_time || item.estimated_delivery || "1-3 Days",
-    item.eligibility_or_note || item.notes || "",
-    item.status || "Active"
-  ]);
-  SpreadsheetApp.flush();
-  return { status: "success", price_id: id };
-}
-
-function saveNoticeItem(item) {
-  var ss = getSpreadsheet();
-  var sheet = getOrCreateSheet(ss, "NoticeBoard");
-  var id = item.notice_id || ("NTC-" + Utilities.getUuid().substring(0, 6).toUpperCase());
-  sheet.appendRow([
-    id,
-    item.title_en || item.title || "",
-    item.title_hi || item.title || "",
-    item.description_en || item.description || "",
-    item.description_hi || item.description || "",
-    item.category || "General",
-    item.badge_type || item.priority || "Important",
-    item.last_date || item.date || "",
-    item.action_link || item.action_url || "",
-    item.status || "Active",
-    new Date().toISOString()
-  ]);
-  SpreadsheetApp.flush();
-  return { status: "success", notice_id: id };
-}
-
-function saveCitizenItem(item) {
-  var ss = getSpreadsheet();
-  var sheet = getOrCreateSheet(ss, "Citizens");
-  var id = item.citizen_id || ("CIT-" + Utilities.getUuid().substring(0, 6).toUpperCase());
-  sheet.appendRow([
-    id,
-    item.full_name || "",
-    item.father_name || "",
-    item.mobile || "",
-    item.aadhaar_last4 || "",
-    item.village || "",
-    item.address || "",
-    item.services_availed || "",
-    item.notes || "",
-    item.status || "Active",
-    new Date().toISOString()
-  ]);
-  SpreadsheetApp.flush();
-  return { status: "success", citizen_id: id };
-}
-
-function saveSettingsData(settingsObj) {
-  var ss = getSpreadsheet();
-  var sheet = getOrCreateSheet(ss, "Settings");
-  sheet.clearContents();
-  sheet.appendRow(["Key", "Value"]);
-  for (var k in settingsObj) {
-    sheet.appendRow([k, String(settingsObj[k] || "")]);
-  }
-  formatHeaderRow(sheet, "#374151");
-  return { status: "success" };
 }
 `;

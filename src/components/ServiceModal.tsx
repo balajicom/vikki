@@ -36,32 +36,45 @@ export const ServiceModal: React.FC = () => {
         className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden border border-slate-200 relative my-8 animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal Header */}
-        <div className="bg-gradient-to-r from-blue-700 to-indigo-800 text-white p-6 sm:p-7 relative">
+        {/* Modal Header with picture */}
+        <div className="relative">
+          {selectedService.image_url && (
+            <div className="w-full h-44 sm:h-52 overflow-hidden bg-slate-900 relative">
+              <img
+                src={selectedService.image_url}
+                alt={title}
+                className="w-full h-full object-cover object-center"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/60 to-black/30" />
+            </div>
+          )}
+
           <button
             type="button"
             id="btn-close-service-modal"
             onClick={closeServiceDetails}
-            className="absolute top-4 right-4 text-blue-100 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-full transition-colors"
+            className="absolute top-4 right-4 z-10 text-white bg-black/50 hover:bg-black/70 p-2 rounded-full transition-colors cursor-pointer"
             aria-label="Close modal"
           >
             <X className="w-5 h-5" />
           </button>
 
-          <div className="flex items-start gap-4">
-            <div className="w-14 h-14 rounded-xl bg-white/10 backdrop-blur-xs border border-white/20 text-white flex items-center justify-center shrink-0 shadow-inner">
-              {getServiceIcon(selectedService.icon, { className: "w-7 h-7 text-amber-300" })}
-            </div>
-            <div className="pr-8">
-              <span className="inline-block px-2.5 py-0.5 text-xs font-semibold bg-white/20 text-blue-100 rounded-full mb-2">
-                {selectedService.category}
-              </span>
-              <h2 className="text-xl sm:text-2xl font-bold leading-tight">
-                {title}
-              </h2>
-              <p className="text-blue-100 text-xs sm:text-sm font-medium mt-1">
-                {secondaryTitle}
-              </p>
+          <div className={`${selectedService.image_url ? 'absolute bottom-0 left-0 right-0 p-5 sm:p-6 text-white' : 'bg-gradient-to-r from-blue-700 to-indigo-800 text-white p-6 sm:p-7 relative'}`}>
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-md border border-white/30 text-white flex items-center justify-center shrink-0 shadow-md">
+                {getServiceIcon(selectedService.icon, { className: "w-6 h-6 text-amber-300" })}
+              </div>
+              <div className="pr-8">
+                <span className="inline-block px-2.5 py-0.5 text-[11px] font-bold bg-white/20 backdrop-blur-md text-white rounded-full mb-1 border border-white/30">
+                  {selectedService.category}
+                </span>
+                <h2 className="text-lg sm:text-2xl font-extrabold leading-tight drop-shadow-sm">
+                  {title}
+                </h2>
+                <p className="text-blue-100 text-xs sm:text-sm font-medium mt-0.5 drop-shadow-sm">
+                  {secondaryTitle}
+                </p>
+              </div>
             </div>
           </div>
         </div>
