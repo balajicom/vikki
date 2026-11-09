@@ -94,16 +94,16 @@ export const SERVICE_PHOTO_PRESETS = [
 ];
 
 export const HARDCODED_SERVICES: Service[] = [
-     {
-    service_id: "srv-custom-mw8rlqe7",
-    service_name_en: "PPPPPPP",
-    service_name_hi: "PPPPPPP",
+      {
+    service_id: "srv-custom-mw8rwjm4",
+    service_name_en: "Recharge",
+    service_name_hi: "Recharge",
     category: "Other Digital Services",
-    image_url: "https://kommodo.ai/tools/image-to-url",
-    short_description_en: "PPPPPPP",
-    short_description_hi: "PPPPPPP",
-    full_description_en: "PPPPPPP",
-    full_description_hi: "PPPPPPP",
+    image_url: "https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?auto=format&fit=crop&w=800&q=80",
+    short_description_en: "Recharge",
+    short_description_hi: "Recharge",
+    full_description_en: "Recharge",
+    full_description_hi: "Recharge",
     required_documents: [
       "Original Aadhaar Card (मूल आधार कार्ड)",
       "Active Mobile Number (चालू मोबाइल नंबर)",
@@ -113,9 +113,9 @@ export const HARDCODED_SERVICES: Service[] = [
     status: "Active",
     popular: true,
     estimated_time: "1-3 Days",
-    whatsapp_message: "Hello Balaji Communication, I want information about PPPPPPP.",
-    created_at: "2026-11-09T04:32:17.887Z",
-    updated_at: "2026-11-09T04:32:17.887Z"
+    whatsapp_message: "Hello Balaji Communication, I want information about Recharge.",
+    created_at: "2026-11-09T04:40:42.316Z",
+    updated_at: "2026-11-09T04:40:42.316Z"
   },
   {
     service_id: "srv-aadhaar-mob",
